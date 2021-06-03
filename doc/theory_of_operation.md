@@ -1,0 +1,72 @@
+# Theory of operation
+
+## Capturing PI call trace
+
+`pi_reproduce` uses XPTI to intercept SYCL runtime calls to Plugin Interface and
+captures API call arguments. The `record` command inserts a few environment
+variables with the help of `execve` call:
+
+- `XPTI_TRACE_ENABLE=1` to enable tracing inside DPC++ runtime.
+- `XPTI_FRAMEWORK_DISPATCHER=libxptifw.so` to specify the event dispatcher.
+- `XPTI_SUBSCRIBERS=libplugin_record.so` to specify the subscriber library,
+  which does most of the work.
+
+The subscriber library listens to `sycl.pi.args` stream, and records all
+arguments into a binary file, which format is described below.
+
+To learn more about XPTI, please, refer to
+[xpti](https://github.com/intel/llvm/blob/sycl/xpti/doc/SYCL_Tracing_Implementation.md)
+and [xptifw](https://github.com/intel/llvm/blob/sycl/xptifw/doc/XPTI_Framework.md)
+documentation.
+
+### Binary trace file format
+
+TBD threading
+
+The `trace.data` file is composed of PI call records. Each record has the
+following format:
+```
+uint32_t function_id -- as defined by PiApiKind enum
+size_t num_outputs -- number of recorded output arguments.
+size_t total_args_size -- number of bytes of recorded input bytes
+--------
+<total_args_size bytes of raw data> -- arguments values
+--------
+-------- - repeated num_outputs times
+size_t output_size -- number of bytes of recorded data
+<output_size bytes of raw data> -- output data
+--------
+pi_result return_value -- the return value of API call
+```
+
+### Handling string arguments
+
+Some PI APIs accept C-style strings as input parameters. In that case the whole
+string with terminating `\0` is stored in the arguments data, and the size of
+the data block will be equal to `sizeof` of other arguments + length of the
+string.
+
+### Device images
+
+Device images are dumped to the output directory on the first call to
+`piextDeviceSelectBinary`. The following naming scheme is used:
+```
+<index of binary image>_<target_arch>.<extension>
+```
+
+Where extension is one of the following:
+- `PI_DEVICE_BINARY_TYPE_SPIRV` -> `.spv`
+- `PI_DEVICE_BINARY_TYPE_NATIVE` -> `.bin`
+- `PI_DEVICE_BINARY_TYPE_LLVMIR_BITCODE` -> `.bc`
+- `PI_DEVICE_BINARY_TYPE_NONE` -> `.none`
+
+TBD describe device image descriptors.
+
+## Replaying PI traces
+
+### Emulating plugins
+TBD
+
+### Emulating DPC++ runtime
+TBD
+
