@@ -22,6 +22,7 @@ public:
   const std::vector<std::string> &args() const noexcept { return mArguments; }
 private:
   void parseRecordOptions(int argc, char *argv[]);
+  void parseReplayOptions(int argc, char *argv[]);
   void parsePrintOptions(int argc, char *argv[]);
   std::filesystem::path mInput;
   std::filesystem::path mOutput;

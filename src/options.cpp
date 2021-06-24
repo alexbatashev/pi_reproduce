@@ -3,7 +3,6 @@
 #include <string_view>
 #include <iostream>
 
-
 static void parseInfoOptions(int argc, const char *argv[]) {
   (void)argv;
 
@@ -14,6 +13,46 @@ static void parseInfoOptions(int argc, const char *argv[]) {
 }
 
 void options::parseRecordOptions(int argc, char *argv[]) {
+  int i = 2;
+  bool hasExtraOpts = false;
+
+  while (i < argc) {
+    std::string_view opt{argv[i]};
+
+    if (opt[0] != '-') {
+      mInput = opt;
+    } else if (opt == "--") {
+      hasExtraOpts = true;
+      i++;
+      break;
+    } else if (opt == "--output" || opt == "-o") {
+      if (i + 1 >= argc) {
+        std::cerr << "--output requires an argument\n";
+        std::terminate();
+      }
+      mOutput = argv[++i];
+    }
+
+    i++;
+  }
+
+  if (hasExtraOpts) {
+    for (int k = i; k < argc; k++) {
+      mArguments.emplace_back(argv[k]);
+    }
+  }
+
+  if (mInput.empty()) {
+    std::cerr << "input is required\n";
+    std::terminate();
+  }
+  if (mOutput.empty()) {
+    std::cerr << "output is required\n";
+    std::terminate();
+  }
+}
+
+void options::parseReplayOptions(int argc, char *argv[]) {
   int i = 2;
   bool hasExtraOpts = false;
 
@@ -86,6 +125,7 @@ options::options(int argc, char *argv[]) {
     parseRecordOptions(argc, argv);
   } else if (command == "replay") {
     mMode = mode::replay;
+    parseReplayOptions(argc, argv);
   } else if (command == "print") {
     mMode = mode::print;
     parsePrintOptions(argc, argv);

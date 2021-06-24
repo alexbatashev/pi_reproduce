@@ -1,26 +1,11 @@
 #include "common.hpp"
 
 #include <cstdlib>
-#include <dlfcn.h>
 #include <exception>
-#include <string>
-#include <sys/ptrace.h>
-#include <sys/wait.h>
-#include <unistd.h>
-#include <signal.h>
-#include <sys/reg.h>
-#include <sys/syscall.h>
-#include <sys/types.h>
-#include <sys/user.h>
-#include <sys/wait.h>
-
-#include <atomic>
 #include <filesystem>
 #include <iostream>
-#include <map>
-#include <mutex>
-#include <queue>
-#include <thread>
+#include <string>
+#include <unistd.h>
 
 void record(const options &opts) {
   const auto &args = opts.args();
@@ -36,7 +21,6 @@ void record(const options &opts) {
 
   std::string outPath = std::string("PI_REPRODUCE_TRACE_PATH=") + opts.output().c_str();
   std::string ldLibraryPath = "LD_LIBRARY_PATH=" + std::string(std::getenv("LD_LIBRARY_PATH"));
-  std::cerr << ldLibraryPath << "\n";
   const char * const env[] = {
     "XPTI_TRACE_ENABLE=1",
     "XPTI_FRAMEWORK_DISPATCHER=libxptifw.so",

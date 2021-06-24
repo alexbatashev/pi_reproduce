@@ -23,6 +23,8 @@ int main(int argc, char *argv[]) {
     record(opts);
   } else if (opts.command() == options::mode::print) {
     printTrace(opts);
+  } else if (opts.command() == options::mode::replay) {
+    replay(opts);
   }
   return 0;
 }
