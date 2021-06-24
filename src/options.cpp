@@ -1,7 +1,7 @@
 #include "options.hpp"
 
-#include <string_view>
 #include <iostream>
+#include <string_view>
 
 static void parseInfoOptions(int argc, const char *argv[]) {
   (void)argv;

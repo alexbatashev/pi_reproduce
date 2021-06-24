@@ -6,8 +6,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <exception>
-#include <fstream>
 #include <filesystem>
+#include <fstream>
 #include <ios>
 #include <string>
 
@@ -22,22 +22,20 @@ sycl::xpti_helpers::PiArgumentsHandler ArgHandler;
 
 template <typename... Ts> struct write_helper;
 
-template <typename T, typename... Rest>
-struct write_helper<T, Rest...> {
-static void write(T Data, Rest... Args) {
-  RecordData.write(reinterpret_cast<const char *>(&Data), sizeof(T));
-  write_helper<Rest...>::write(Args...);
-}
+template <typename T, typename... Rest> struct write_helper<T, Rest...> {
+  static void write(T Data, Rest... Args) {
+    RecordData.write(reinterpret_cast<const char *>(&Data), sizeof(T));
+    write_helper<Rest...>::write(Args...);
+  }
 };
 
 template <typename T> struct write_helper<T> {
-static void write(T Data) {
-  RecordData.write(reinterpret_cast<const char *>(&Data), sizeof(T));
-}
+  static void write(T Data) {
+    RecordData.write(reinterpret_cast<const char *>(&Data), sizeof(T));
+  }
 };
 
-template <typename... Ts>
-void saveDefaultArgs(Ts... Args) {
+template <typename... Ts> void saveDefaultArgs(Ts... Args) {
   size_t TotalSize = (sizeof(Ts) + ...);
   size_t NumOutputs = 0;
 
@@ -53,7 +51,8 @@ void saveGetInfo(T1 Obj, T2 Param, size_t Size, void *Value, size_t *RetSize) {
 
   RecordData.write(reinterpret_cast<const char *>(&NumOutputs), sizeof(size_t));
   RecordData.write(reinterpret_cast<const char *>(&TotalSize), sizeof(size_t));
-  write_helper<T1, T2, size_t, void*, size_t*>::write(Obj, Param, Size, Value, RetSize);
+  write_helper<T1, T2, size_t, void *, size_t *>::write(Obj, Param, Size, Value,
+                                                        RetSize);
 
   if (Value != nullptr) {
     RecordData.write(reinterpret_cast<const char *>(&Size), sizeof(size_t));
@@ -66,7 +65,8 @@ void saveGetInfo(T1 Obj, T2 Param, size_t Size, void *Value, size_t *RetSize) {
   }
 }
 
-void handleSelectBinary(pi_device device, pi_device_binary *binaries, pi_uint32 numBinaries, pi_uint32 *selectedBinary) {
+void handleSelectBinary(pi_device device, pi_device_binary *binaries,
+                        pi_uint32 numBinaries, pi_uint32 *selectedBinary) {
   if (!binariesCollected) {
     std::filesystem::path outDir{std::getenv("PI_REPRODUCE_TRACE_PATH")};
     binariesCollected = true;
@@ -81,10 +81,14 @@ void handleSelectBinary(pi_device device, pi_device_binary *binaries, pi_uint32 
       else if (binaries[i]->Format == PI_DEVICE_BINARY_TYPE_NONE)
         extension = ".none";
 
-      auto binPath = outDir / (std::to_string(i) + "_" + std::string(binaries[i]->DeviceTargetSpec) + extension);
+      auto binPath =
+          outDir / (std::to_string(i) + "_" +
+                    std::string(binaries[i]->DeviceTargetSpec) + extension);
       std::ofstream os{binPath, std::ofstream::binary};
-      size_t binarySize = std::distance(binaries[i]->BinaryStart, binaries[i]->BinaryEnd);
-      os.write(reinterpret_cast<const char*>(binaries[i]->BinaryStart), binarySize);
+      size_t binarySize =
+          std::distance(binaries[i]->BinaryStart, binaries[i]->BinaryEnd);
+      os.write(reinterpret_cast<const char *>(binaries[i]->BinaryStart),
+               binarySize);
       os.close();
     }
   }
@@ -93,22 +97,29 @@ void handleSelectBinary(pi_device device, pi_device_binary *binaries, pi_uint32 
   saveDefaultArgs(device, binaries, numBinaries, selectedBinary);
 }
 
-void handleProgramBuild(pi_program prog, pi_uint32 numDevices, const pi_device *devices, const char *opts, void (*pfn_notify)(pi_program program, void *user_data), void *user_data) {
-  size_t totalSize = sizeof(pi_program) + sizeof(pi_uint32) + 3 * sizeof(size_t) + strlen(opts) + 1;
+void handleProgramBuild(pi_program prog, pi_uint32 numDevices,
+                        const pi_device *devices, const char *opts,
+                        void (*pfn_notify)(pi_program program, void *user_data),
+                        void *user_data) {
+  size_t totalSize = sizeof(pi_program) + sizeof(pi_uint32) +
+                     3 * sizeof(size_t) + strlen(opts) + 1;
   size_t numOutputs = 0;
 
   RecordData.write(reinterpret_cast<const char *>(&numOutputs), sizeof(size_t));
   RecordData.write(reinterpret_cast<const char *>(&totalSize), sizeof(size_t));
-  write_helper<pi_program, pi_uint32, const pi_device*>::write(prog, numDevices, devices);
+  write_helper<pi_program, pi_uint32, const pi_device *>::write(
+      prog, numDevices, devices);
 
   RecordData.write(opts, strlen(opts));
   RecordData.put('\0');
 
-  write_helper<decltype(pfn_notify), void*>::write(pfn_notify, user_data);
+  write_helper<decltype(pfn_notify), void *>::write(pfn_notify, user_data);
 }
 
-void handleKernelCreate(pi_program prog, const char *kernelName, pi_kernel *retKernel) {
-  size_t totalSize = sizeof(pi_program) + sizeof(pi_kernel*) + strlen(kernelName) + 1;
+void handleKernelCreate(pi_program prog, const char *kernelName,
+                        pi_kernel *retKernel) {
+  size_t totalSize =
+      sizeof(pi_program) + sizeof(pi_kernel *) + strlen(kernelName) + 1;
   size_t numOutputs = 0;
 
   RecordData.write(reinterpret_cast<const char *>(&numOutputs), sizeof(size_t));
@@ -118,7 +129,7 @@ void handleKernelCreate(pi_program prog, const char *kernelName, pi_kernel *retK
   RecordData.write(kernelName, strlen(kernelName));
   RecordData.put('\0');
 
-  write_helper<pi_kernel*>::write(retKernel);
+  write_helper<pi_kernel *>::write(retKernel);
 }
 
 void handlePlatformsGet(pi_uint32 numEntries, pi_platform *platforms,
@@ -193,11 +204,14 @@ XPTI_CALLBACK_API void xptiTraceInit(unsigned int major_version,
     ArgHandler.set_piKernelCreate(handleKernelCreate);
     ArgHandler.set_piPlatformsGet(handlePlatformsGet);
     ArgHandler.set_piDevicesGet(handleDevicesGet);
-    ArgHandler.set_piPlatformGetInfo([](auto &&... Args) { saveGetInfo(Args...); });
-    ArgHandler.set_piDeviceGetInfo([](auto &&... Args) { saveGetInfo(Args...); });
+    ArgHandler.set_piPlatformGetInfo(
+        [](auto &&...Args) { saveGetInfo(Args...); });
+    ArgHandler.set_piDeviceGetInfo(
+        [](auto &&...Args) { saveGetInfo(Args...); });
 
     std::filesystem::path outDir{std::getenv("PI_REPRODUCE_TRACE_PATH")};
-    RecordData = std::ofstream(outDir / "trace.data", std::ios::out | std::ios::binary);
+    RecordData =
+        std::ofstream(outDir / "trace.data", std::ios::out | std::ios::binary);
   }
 }
 
@@ -219,9 +233,11 @@ XPTI_CALLBACK_API void tpCallback(uint16_t TraceType,
     const auto *Data =
         static_cast<const xpti::function_with_args_t *>(UserData);
 
-    RecordData.write(reinterpret_cast<const char *>(&Data->function_id), sizeof(uint32_t));
+    RecordData.write(reinterpret_cast<const char *>(&Data->function_id),
+                     sizeof(uint32_t));
 
     ArgHandler.handle(Data->function_id, Data->args_data);
-    RecordData.write(reinterpret_cast<const char *>(Data->ret_data), sizeof(pi_result));
+    RecordData.write(reinterpret_cast<const char *>(Data->ret_data),
+                     sizeof(pi_result));
   }
 }

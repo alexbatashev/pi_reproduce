@@ -1,9 +1,9 @@
-#include "options.hpp"
 #include "common.hpp"
+#include "options.hpp"
 
 #include <iostream>
-#include <vector>
 #include <unistd.h>
+#include <vector>
 
 static void printInfo() {
   std::cout << "pi reproducer\n";
