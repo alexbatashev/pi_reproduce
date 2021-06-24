@@ -49,7 +49,7 @@ void saveDefaultArgs(Ts... Args) {
 template <typename T1, typename T2>
 void saveGetInfo(T1 Obj, T2 Param, size_t Size, void *Value, size_t *RetSize) {
   size_t TotalSize = sizeof(T1) + sizeof(T2) + 3 * sizeof(size_t);
-  size_t NumOutputs = Value == nullptr ? 0 : 1;
+  size_t NumOutputs = 1;
 
   RecordData.write(reinterpret_cast<const char *>(&NumOutputs), sizeof(size_t));
   RecordData.write(reinterpret_cast<const char *>(&TotalSize), sizeof(size_t));
@@ -58,6 +58,11 @@ void saveGetInfo(T1 Obj, T2 Param, size_t Size, void *Value, size_t *RetSize) {
   if (Value != nullptr) {
     RecordData.write(reinterpret_cast<const char *>(&Size), sizeof(size_t));
     RecordData.write(static_cast<const char *>(Value), Size);
+  }
+  if (RetSize != nullptr) {
+    size_t outSize = sizeof(size_t);
+    RecordData.write(reinterpret_cast<const char *>(&outSize), sizeof(size_t));
+    RecordData.write(reinterpret_cast<const char *>(RetSize), outSize);
   }
 }
 
@@ -116,6 +121,45 @@ void handleKernelCreate(pi_program prog, const char *kernelName, pi_kernel *retK
   write_helper<pi_kernel*>::write(retKernel);
 }
 
+void handlePlatformsGet(pi_uint32 numEntries, pi_platform *platforms,
+                        pi_uint32 *numPlatforms) {
+  size_t totalSize = sizeof(pi_uint32) + 2 * sizeof(void *);
+  size_t numOutputs = (numPlatforms == nullptr) ? 0 : 1;
+
+  RecordData.write(reinterpret_cast<const char *>(&numOutputs), sizeof(size_t));
+  RecordData.write(reinterpret_cast<const char *>(&totalSize), sizeof(size_t));
+
+  write_helper<pi_uint32, pi_platform *, pi_uint32 *>::write(
+      numEntries, platforms, numPlatforms);
+
+  if (numPlatforms != nullptr) {
+    size_t outSize = sizeof(pi_uint32);
+    RecordData.write(reinterpret_cast<const char *>(&outSize), sizeof(size_t));
+    RecordData.write(reinterpret_cast<const char *>(numPlatforms), outSize);
+  }
+}
+
+void handleDevicesGet(pi_platform platform, pi_device_type type,
+                      pi_uint32 numEntries, pi_device *devs,
+                      pi_uint32 *numDevices) {
+  size_t totalSize = sizeof(pi_platform) + sizeof(pi_device_type) +
+                     sizeof(pi_uint32) + 2 * sizeof(void *);
+  size_t numOutputs = (numDevices == nullptr) ? 0 : 1;
+
+  RecordData.write(reinterpret_cast<const char *>(&numOutputs), sizeof(size_t));
+  RecordData.write(reinterpret_cast<const char *>(&totalSize), sizeof(size_t));
+
+  write_helper<pi_platform, pi_device_type, pi_uint32, pi_device *,
+               pi_uint32 *>::write(platform, type, numEntries, devs,
+                                   numDevices);
+
+  if (numDevices != nullptr) {
+    size_t outSize = sizeof(pi_uint32);
+    RecordData.write(reinterpret_cast<const char *>(&outSize), sizeof(size_t));
+    RecordData.write(reinterpret_cast<const char *>(numDevices), outSize);
+  }
+}
+
 XPTI_CALLBACK_API void tpCallback(uint16_t trace_type,
                                   xpti::trace_event_data_t *parent,
                                   xpti::trace_event_data_t *event,
@@ -139,16 +183,16 @@ XPTI_CALLBACK_API void xptiTraceInit(unsigned int major_version,
         GStreamID, (uint16_t)xpti::trace_point_type_t::function_with_args_end,
         tpCallback);
 
-#define _PI_API(api)                                                           \
-  ArgHandler.set##_##api([](auto &&...Args) {                                  \
-    saveDefaultArgs(Args...);                                      \
-  });
+#define _PI_API(api, ...)                                                      \
+  ArgHandler.set##_##api([](auto &&...Args) { saveDefaultArgs(Args...); });
 #include <CL/sycl/detail/pi.def>
 #undef _PI_API
 
     ArgHandler.set_piextDeviceSelectBinary(handleSelectBinary);
     ArgHandler.set_piProgramBuild(handleProgramBuild);
     ArgHandler.set_piKernelCreate(handleKernelCreate);
+    ArgHandler.set_piPlatformsGet(handlePlatformsGet);
+    ArgHandler.set_piDevicesGet(handleDevicesGet);
     ArgHandler.set_piPlatformGetInfo([](auto &&... Args) { saveGetInfo(Args...); });
     ArgHandler.set_piDeviceGetInfo([](auto &&... Args) { saveGetInfo(Args...); });
 

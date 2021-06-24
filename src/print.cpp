@@ -73,8 +73,8 @@ void printTrace(const options &opts) {
 
   sycl::xpti_helpers::PiArgumentsHandler argHandler;
 
-#define _PI_API(api)                                                           \
-  argHandler.set##_##api([](auto &&... Args) {                                 \
+#define _PI_API(api, ...)                                                      \
+  argHandler.set##_##api([](auto &&...Args) {                                  \
     std::cout << "---> " << #api << "("                                        \
               << "\n";                                                         \
     sycl::detail::pi::printArgs(Args...);                                      \

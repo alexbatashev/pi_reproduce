@@ -1,6 +1,7 @@
 set(CMAKE_BUILD_RPATH ${CMAKE_BUILD_DIR}/lib/plugin_record)
 add_executable(prp
   record.cpp
+  replay.cpp
   print.cpp
   options.cpp
   main.cpp)
