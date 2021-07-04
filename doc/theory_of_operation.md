@@ -82,7 +82,13 @@ TBD describe device image descriptors.
 ## Replaying PI traces
 
 ### Emulating plugins
-TBD
+
+Plugin emulation relies on SYCL runtime's plugin override capability.
+`pi_reproduce` provides a PI plugin implementation, that reads trace files and
+responses PI calls with that info.
+
+Trace files are read sequentially, so, it is essential for the program to have
+the same environment and command line arguments.
 
 ### Emulating DPC++ runtime
 TBD
