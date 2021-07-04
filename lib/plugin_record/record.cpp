@@ -3,6 +3,7 @@
 #include "pi_arguments_handler.hpp"
 #include "xpti_trace_framework.h"
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -11,16 +12,18 @@
 #include <filesystem>
 #include <fstream>
 #include <ios>
+#include <pthread.h>
 #include <string>
 
 static uint8_t GStreamID = 0;
-std::mutex GIOMutex;
 
 bool binariesCollected = false;
 
-std::ofstream RecordData;
+thread_local std::ofstream RecordData;
 
 sycl::xpti_helpers::PiArgumentsHandler ArgHandler;
+
+std::chrono::time_point<std::chrono::steady_clock> GStartTime;
 
 template <typename... Ts> struct write_helper;
 
@@ -322,16 +325,12 @@ XPTI_CALLBACK_API void xptiTraceInit(unsigned int major_version,
            auto &&...Args) { saveGetInfo(Args...); });
     ArgHandler.set_piKernelGetGroupInfo(handleKernelGetGroupInfo);
 
-    std::filesystem::path outDir{std::getenv("PI_REPRODUCE_TRACE_PATH")};
-    RecordData =
-        std::ofstream(outDir / "trace.data", std::ios::out | std::ios::binary);
+    GStartTime = std::chrono::steady_clock::now();
   }
 }
 
 XPTI_CALLBACK_API void xptiTraceFinish(const char *stream_name) {
-  if (std::string_view(stream_name) == "sycl.pi.arg") {
-    RecordData.close();
-  }
+  // NOP
 }
 
 XPTI_CALLBACK_API void tpCallback(uint16_t TraceType,
@@ -339,9 +338,17 @@ XPTI_CALLBACK_API void tpCallback(uint16_t TraceType,
                                   xpti::trace_event_data_t *Event,
                                   uint64_t Instance, const void *UserData) {
   auto Type = static_cast<xpti::trace_point_type_t>(TraceType);
-  if (Type == xpti::trace_point_type_t::function_with_args_end) {
-    // Lock while we print information
-    std::lock_guard<std::mutex> Lock(GIOMutex);
+  if (Type == xpti::trace_point_type_t::function_with_args_begin) {
+    const auto start = std::chrono::steady_clock::now();
+    if (!RecordData.is_open()) {
+      std::filesystem::path outDir{std::getenv("PI_REPRODUCE_TRACE_PATH")};
+      std::array<char, 1024> buf;
+      pthread_getname_np(pthread_self(), buf.data(), buf.size());
+      std::string filename{buf.data()};
+      filename += ".trace";
+      RecordData = std::ofstream(
+          outDir / filename, std::ios::out | std::ios::app | std::ios::binary);
+    }
 
     const auto *Data =
         static_cast<const xpti::function_with_args_t *>(UserData);
@@ -351,10 +358,37 @@ XPTI_CALLBACK_API void tpCallback(uint16_t TraceType,
 
     const auto *Plugin =
         static_cast<sycl::detail::XPTIPluginInfo *>(Data->user_data);
+    RecordData.write(reinterpret_cast<const char *>(&Plugin->backend),
+                     sizeof(uint8_t));
+
+    uint64_t startPoint = std::chrono::duration_cast<std::chrono::microseconds>(
+                              start - GStartTime)
+                              .count();
+    RecordData.write(reinterpret_cast<const char *>(&startPoint),
+                     sizeof(uint64_t));
+  } else if (Type == xpti::trace_point_type_t::function_with_args_end) {
+    const auto end = std::chrono::steady_clock::now();
+    uint64_t endPoint =
+        std::chrono::duration_cast<std::chrono::microseconds>(end - GStartTime)
+            .count();
+    RecordData.write(reinterpret_cast<const char *>(&endPoint),
+                     sizeof(uint64_t));
+
+    size_t numInputs = 0; // unused for now.
+    RecordData.write(reinterpret_cast<const char *>(&numInputs),
+                     sizeof(size_t));
+
+    const auto *Data =
+        static_cast<const xpti::function_with_args_t *>(UserData);
+
+    const auto *Plugin =
+        static_cast<sycl::detail::XPTIPluginInfo *>(Data->user_data);
     const pi_result Result = *static_cast<pi_result *>(Data->ret_data);
     ArgHandler.handle(Data->function_id, *Plugin, Result, Data->args_data);
 
     RecordData.write(reinterpret_cast<const char *>(Data->ret_data),
                      sizeof(pi_result));
+
+    RecordData.flush();
   }
 }

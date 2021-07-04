@@ -101,6 +101,21 @@ void options::parsePrintOptions(int argc, char *argv[]) {
 
     if (opt[0] != '-') {
       mInput = opt;
+    } else if (opt == "--group") {
+      std::string_view group{argv[++i]};
+      if (group == "none") {
+        mPringGroup = print_group_by::none;
+      } else if (group == "thread") {
+        mPringGroup = print_group_by::thread;
+      } else {
+        std::cerr << "Expected none or thread for --group argument. Got "
+                  << group << "\n";
+        std::terminate();
+      }
+    } else if (opt == "--verbose") {
+      mVerbose = true;
+    } else if (opt == "--perf") {
+      mPrintPerformanceSummary = true;
     }
 
     i++;

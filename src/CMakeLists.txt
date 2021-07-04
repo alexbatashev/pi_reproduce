@@ -1,7 +1,9 @@
-set(CMAKE_BUILD_RPATH ${CMAKE_BUILD_DIR} / lib / plugin_record)
+add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/fmt ${PROJECT_BINARY_DIR}/fmt)
+
+set(CMAKE_BUILD_RPATH ${CMAKE_BINARY_DIR}/lib/plugin_record)
 add_executable(prp record.cpp replay.cpp print.cpp options.cpp main.cpp)
 
-target_link_libraries(prp PRIVATE -ldl -lpthread)
+target_link_libraries(prp PRIVATE -ldl -lpthread fmt)
 
 target_include_directories(prp PRIVATE
   ${INTEL_LLVM_PATH}/sycl/include
