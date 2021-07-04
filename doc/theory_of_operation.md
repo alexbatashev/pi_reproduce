@@ -21,16 +21,22 @@ documentation.
 
 ### Binary trace file format
 
-TBD threading
-
-The `trace.data` file is composed of PI call records. Each record has the
+Each `.trace` file is composed of PI call records. Each record has the
 following format:
 ```
 uint32_t function_id -- as defined by PiApiKind enum
+uint8_t backend -- backend id, same as sycl::backend.
+uint64_t start -- call start timestamp in microseconds.
+uint64_t end -- call end timestamp in microseconds.
+size_t num_inputs -- number of recorded input arguments.
 size_t num_outputs -- number of recorded output arguments.
 size_t total_args_size -- number of bytes of recorded input bytes
 --------
 <total_args_size bytes of raw data> -- arguments values
+--------
+-------- - repeated num_inputs times
+size_t input_size -- number of bytes of recorded data
+<input_size bytes of raw data> -- input data
 --------
 -------- - repeated num_outputs times
 size_t output_size -- number of bytes of recorded data
@@ -45,6 +51,17 @@ Some PI APIs accept C-style strings as input parameters. In that case the whole
 string with terminating `\0` is stored in the arguments data, and the size of
 the data block will be equal to `sizeof` of other arguments + length of the
 string.
+
+### Handling multithreading
+
+`pi_reproduce` records traces per each thread. To be able to reliably
+distinguish between thread, the tool injects a library, that intercepts
+`pthread_create` function and assigns each thread a unique name. The first
+thread is always named `main`. On thread creation, newly thread is assigned name
+in format `<current_thread_name>_n`, where `n` is the index number of the
+thread, started by current thread. For each thread a file with thread name is
+created. When printing, `prp` tool can either show traces per thread, or sort
+records by API call time.
 
 ### Device images
 

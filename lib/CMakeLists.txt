@@ -1,2 +1,3 @@
 add_subdirectory(plugin_record)
 add_subdirectory(plugin_replay)
+add_subdirectory(system_intercept)
