@@ -330,9 +330,7 @@ XPTI_CALLBACK_API void xptiTraceInit(unsigned int major_version,
 }
 
 XPTI_CALLBACK_API void xptiTraceFinish(const char *stream_name) {
-  if (std::string_view(stream_name) == "sycl.pi.arg") {
-    // RecordData.close();
-  }
+  // NOP
 }
 
 XPTI_CALLBACK_API void tpCallback(uint16_t TraceType,
