@@ -24,8 +24,12 @@ void replay(const options &opts) {
   std::string ldLibraryPath =
       "LD_LIBRARY_PATH=" + std::string(std::getenv("LD_LIBRARY_PATH"));
   const char *const env[] = {ldLibraryPath.c_str(),
-                             "SYCL_OVERRIDE_PLUGINS=libplugin_replay.so",
-                             outPath.c_str(), nullptr};
+                             "SYCL_OVERRIDE_PI_OPENCL=libplugin_replay.so",
+                             "SYCL_OVERRIDE_PI_LEVEL_ZERO=libplugin_replay.so",
+                             "SYCL_OVERRIDE_PI_CUDA=libplugin_replay.so",
+                             "SYCL_OVERRIDE_PI_ROCM=libplugin_replay.so",
+                             outPath.c_str(),
+                             nullptr};
   auto err = execve(opts.input().c_str(), const_cast<char *const *>(cArgs),
                     const_cast<char *const *>(env));
   if (err) {
