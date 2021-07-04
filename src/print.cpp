@@ -3,6 +3,7 @@
 #include "options.hpp"
 #include "pi_arguments_handler.hpp"
 #include <CL/sycl/detail/pi.h>
+#include <CL/sycl/detail/xpti_plugin_info.hpp>
 #include <detail/plugin_printers.hpp>
 
 #include <array>
@@ -16,6 +17,19 @@ template <typename DstT, typename SrcT>
 DstT offset_cast(size_t offset, SrcT *ptr) {
   char *rptr = reinterpret_cast<char *>(ptr);
   return reinterpret_cast<DstT>(rptr + offset);
+}
+
+template <typename T, typename... Ts> struct PrintHelper {
+  static void print(T arg, Ts &&...args) {
+    std::cout << "      <unknown> : " << arg << "\n";
+    if constexpr (sizeof...(Ts) > 0) {
+      PrintHelper<Ts...>::print(args...);
+    }
+  }
+};
+
+template <typename... Ts> static void printArgs(Ts &&...args) {
+  PrintHelper<Ts...>::print(args...);
 }
 
 static void printProgramBuild(void *data) {
@@ -74,10 +88,11 @@ void printTrace(const options &opts) {
   sycl::xpti_helpers::PiArgumentsHandler argHandler;
 
 #define _PI_API(api, ...)                                                      \
-  argHandler.set##_##api([](auto &&...Args) {                                  \
+  argHandler.set##_##api([](sycl::detail::XPTIPluginInfo,                      \
+                            std::optional<pi_result>, auto &&...Args) {        \
     std::cout << "---> " << #api << "("                                        \
               << "\n";                                                         \
-    sycl::detail::pi::printArgs(Args...);                                      \
+    printArgs(Args...);                                                        \
     std::cout << ") ---> ";                                                    \
   });
 #include <CL/sycl/detail/pi.def>
@@ -112,7 +127,8 @@ void printTrace(const options &opts) {
     } else if (functionId == static_cast<uint32_t>(PiApiKind::piKernelCreate)) {
       printKernelCreate(argumentsData.data());
     } else {
-      argHandler.handle(functionId, argumentsData.data());
+      XPTIPluginInfo plugin;
+      argHandler.handle(functionId, plugin, result, argumentsData.data());
     }
     std::cout << result << "\n";
   }

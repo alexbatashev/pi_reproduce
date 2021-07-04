@@ -1,3 +1,5 @@
+#include <CL/sycl/detail/xpti_plugin_info.hpp>
+
 #include "pi_arguments_handler.hpp"
 #include "xpti_trace_framework.h"
 
@@ -35,6 +37,10 @@ template <typename T> struct write_helper<T> {
   }
 };
 
+template <typename... Ts> void writeArgs(Ts &&...args) {
+  write_helper<Ts...>::write(args...);
+}
+
 template <typename... Ts> void saveDefaultArgs(Ts... Args) {
   size_t TotalSize = (sizeof(Ts) + ...);
   size_t NumOutputs = 0;
@@ -65,7 +71,8 @@ void saveGetInfo(T1 Obj, T2 Param, size_t Size, void *Value, size_t *RetSize) {
   }
 }
 
-void handleSelectBinary(pi_device device, pi_device_binary *binaries,
+void handleSelectBinary(sycl::detail::XPTIPluginInfo, std::optional<pi_result>,
+                        pi_device device, pi_device_binary *binaries,
                         pi_uint32 numBinaries, pi_uint32 *selectedBinary) {
   if (!binariesCollected) {
     std::filesystem::path outDir{std::getenv("PI_REPRODUCE_TRACE_PATH")};
@@ -93,11 +100,22 @@ void handleSelectBinary(pi_device device, pi_device_binary *binaries,
     }
   }
 
-  // TODO also properly save output argument.
-  saveDefaultArgs(device, binaries, numBinaries, selectedBinary);
+  size_t TotalSize = sizeof(pi_device) + 2 * sizeof(void *) + sizeof(pi_uint32);
+  size_t NumOutputs = 1;
+
+  RecordData.write(reinterpret_cast<const char *>(&NumOutputs), sizeof(size_t));
+  RecordData.write(reinterpret_cast<const char *>(&TotalSize), sizeof(size_t));
+  write_helper<pi_device, pi_device_binary *, pi_uint32, pi_uint32 *>::write(
+      device, binaries, numBinaries, selectedBinary);
+
+  size_t outSize = sizeof(pi_uint32 *);
+  RecordData.write(reinterpret_cast<const char *>(&outSize), sizeof(size_t));
+  RecordData.write(reinterpret_cast<const char *>(selectedBinary),
+                   sizeof(outSize));
 }
 
-void handleProgramBuild(pi_program prog, pi_uint32 numDevices,
+void handleProgramBuild(sycl::detail::XPTIPluginInfo, std::optional<pi_result>,
+                        pi_program prog, pi_uint32 numDevices,
                         const pi_device *devices, const char *opts,
                         void (*pfn_notify)(pi_program program, void *user_data),
                         void *user_data) {
@@ -116,7 +134,8 @@ void handleProgramBuild(pi_program prog, pi_uint32 numDevices,
   write_helper<decltype(pfn_notify), void *>::write(pfn_notify, user_data);
 }
 
-void handleKernelCreate(pi_program prog, const char *kernelName,
+void handleKernelCreate(sycl::detail::XPTIPluginInfo, std::optional<pi_result>,
+                        pi_program prog, const char *kernelName,
                         pi_kernel *retKernel) {
   size_t totalSize =
       sizeof(pi_program) + sizeof(pi_kernel *) + strlen(kernelName) + 1;
@@ -132,7 +151,8 @@ void handleKernelCreate(pi_program prog, const char *kernelName,
   write_helper<pi_kernel *>::write(retKernel);
 }
 
-void handlePlatformsGet(pi_uint32 numEntries, pi_platform *platforms,
+void handlePlatformsGet(sycl::detail::XPTIPluginInfo, std::optional<pi_result>,
+                        pi_uint32 numEntries, pi_platform *platforms,
                         pi_uint32 *numPlatforms) {
   size_t totalSize = sizeof(pi_uint32) + 2 * sizeof(void *);
   size_t numOutputs = (numPlatforms == nullptr) ? 0 : 1;
@@ -150,7 +170,8 @@ void handlePlatformsGet(pi_uint32 numEntries, pi_platform *platforms,
   }
 }
 
-void handleDevicesGet(pi_platform platform, pi_device_type type,
+void handleDevicesGet(sycl::detail::XPTIPluginInfo, std::optional<pi_result>,
+                      pi_platform platform, pi_device_type type,
                       pi_uint32 numEntries, pi_device *devs,
                       pi_uint32 *numDevices) {
   size_t totalSize = sizeof(pi_platform) + sizeof(pi_device_type) +
@@ -168,6 +189,87 @@ void handleDevicesGet(pi_platform platform, pi_device_type type,
     size_t outSize = sizeof(pi_uint32);
     RecordData.write(reinterpret_cast<const char *>(&outSize), sizeof(size_t));
     RecordData.write(reinterpret_cast<const char *>(numDevices), outSize);
+  }
+}
+
+void handleEnqueueMemBufferMap(sycl::detail::XPTIPluginInfo Plugin,
+                               std::optional<pi_result>, pi_queue command_queue,
+                               pi_mem buffer, pi_bool blocking_map,
+                               pi_map_flags map_flags, size_t offset,
+                               size_t size, pi_uint32 num_events_in_wait_list,
+                               const pi_event *event_wait_list, pi_event *event,
+                               void **ret_map) {
+  // Wait for map to finish
+  Plugin.plugin.PiFunctionTable.piEventsWait(1, event);
+
+  size_t numOutputs = 1;
+
+  const auto saveFunc = [numOutputs](auto... args) {
+    size_t totalSize = (sizeof(decltype(args)) + ...);
+
+    RecordData.write(reinterpret_cast<const char *>(&numOutputs),
+                     sizeof(size_t));
+    RecordData.write(reinterpret_cast<const char *>(&totalSize),
+                     sizeof(size_t));
+
+    write_helper<decltype(args)...>::write(args...);
+  };
+  saveFunc(command_queue, buffer, blocking_map, map_flags, offset, size,
+           num_events_in_wait_list, event_wait_list, event, ret_map);
+
+  RecordData.write(reinterpret_cast<const char *>(&size), sizeof(size_t));
+  RecordData.write(static_cast<const char *>(*ret_map), size);
+}
+
+void handleEnqueueMemBufferRead(sycl::detail::XPTIPluginInfo Plugin,
+                                std::optional<pi_result>, pi_queue queue,
+                                pi_mem buffer, pi_bool blocking_read,
+                                size_t offset, size_t size, void *ptr,
+                                pi_uint32 num_events_in_wait_list,
+                                const pi_event *event_wait_list,
+                                pi_event *event) {
+
+  Plugin.plugin.PiFunctionTable.piEventsWait(1, event);
+
+  size_t numOutputs = 1;
+
+  const auto saveFunc = [numOutputs](auto... args) {
+    size_t totalSize = (sizeof(decltype(args)) + ...);
+
+    RecordData.write(reinterpret_cast<const char *>(&numOutputs),
+                     sizeof(size_t));
+    RecordData.write(reinterpret_cast<const char *>(&totalSize),
+                     sizeof(size_t));
+
+    write_helper<decltype(args)...>::write(args...);
+  };
+  saveFunc(queue, buffer, blocking_read, offset, size, ptr,
+           num_events_in_wait_list, event_wait_list, event);
+
+  RecordData.write(reinterpret_cast<const char *>(&size), sizeof(size_t));
+  RecordData.write(static_cast<const char *>(ptr), size);
+}
+
+void handleKernelGetGroupInfo(sycl::detail::XPTIPluginInfo,
+                              std::optional<pi_result>, pi_kernel kernel,
+                              pi_device device, pi_kernel_group_info param_name,
+                              size_t Size, void *Value, size_t *RetSize) {
+  size_t TotalSize = sizeof(pi_kernel) + sizeof(pi_device) +
+                     sizeof(pi_kernel_group_info) + 3 * sizeof(size_t);
+  size_t NumOutputs = 1;
+
+  RecordData.write(reinterpret_cast<const char *>(&NumOutputs), sizeof(size_t));
+  RecordData.write(reinterpret_cast<const char *>(&TotalSize), sizeof(size_t));
+  writeArgs(kernel, device, param_name, Size, Value, RetSize);
+
+  if (Value != nullptr) {
+    RecordData.write(reinterpret_cast<const char *>(&Size), sizeof(size_t));
+    RecordData.write(static_cast<const char *>(Value), Size);
+  }
+  if (RetSize != nullptr) {
+    size_t outSize = sizeof(size_t);
+    RecordData.write(reinterpret_cast<const char *>(&outSize), sizeof(size_t));
+    RecordData.write(reinterpret_cast<const char *>(RetSize), outSize);
   }
 }
 
@@ -204,10 +306,21 @@ XPTI_CALLBACK_API void xptiTraceInit(unsigned int major_version,
     ArgHandler.set_piKernelCreate(handleKernelCreate);
     ArgHandler.set_piPlatformsGet(handlePlatformsGet);
     ArgHandler.set_piDevicesGet(handleDevicesGet);
+    ArgHandler.set_piEnqueueMemBufferMap(handleEnqueueMemBufferMap);
+    ArgHandler.set_piEnqueueMemBufferRead(handleEnqueueMemBufferRead);
     ArgHandler.set_piPlatformGetInfo(
-        [](auto &&...Args) { saveGetInfo(Args...); });
+        [](sycl::detail::XPTIPluginInfo, std::optional<pi_result>,
+           auto &&...Args) { saveGetInfo(Args...); });
     ArgHandler.set_piDeviceGetInfo(
-        [](auto &&...Args) { saveGetInfo(Args...); });
+        [](sycl::detail::XPTIPluginInfo, std::optional<pi_result>,
+           auto &&...Args) { saveGetInfo(Args...); });
+    ArgHandler.set_piContextGetInfo(
+        [](sycl::detail::XPTIPluginInfo, std::optional<pi_result>,
+           auto &&...Args) { saveGetInfo(Args...); });
+    ArgHandler.set_piKernelGetInfo(
+        [](sycl::detail::XPTIPluginInfo, std::optional<pi_result>,
+           auto &&...Args) { saveGetInfo(Args...); });
+    ArgHandler.set_piKernelGetGroupInfo(handleKernelGetGroupInfo);
 
     std::filesystem::path outDir{std::getenv("PI_REPRODUCE_TRACE_PATH")};
     RecordData =
@@ -236,7 +349,11 @@ XPTI_CALLBACK_API void tpCallback(uint16_t TraceType,
     RecordData.write(reinterpret_cast<const char *>(&Data->function_id),
                      sizeof(uint32_t));
 
-    ArgHandler.handle(Data->function_id, Data->args_data);
+    const auto *Plugin =
+        static_cast<sycl::detail::XPTIPluginInfo *>(Data->user_data);
+    const pi_result Result = *static_cast<pi_result *>(Data->ret_data);
+    ArgHandler.handle(Data->function_id, *Plugin, Result, Data->args_data);
+
     RecordData.write(reinterpret_cast<const char *>(Data->ret_data),
                      sizeof(pi_result));
   }
