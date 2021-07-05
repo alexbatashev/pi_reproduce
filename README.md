@@ -31,7 +31,7 @@ ninja
 
 ### Recording traces
 ```bash
-prp record -o /path/to/output/dir ./myapp -- --app-arg1 --app-arg2=foo
+dpcpp_trace record -o /path/to/output/dir ./myapp -- --app-arg1 --app-arg2=foo
 ```
 
 ### Printing traces
@@ -57,4 +57,9 @@ Performance summary:
 
 ```bash
 dpcpp_trace print /path/to/output/dir --perf
+```
+
+### Replaying traces
+```bash
+dpcpp_trace replay -o /path/to/output/dir ./myapp -- --app-arg1 --app-arg2=foo
 ```
