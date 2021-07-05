@@ -13,8 +13,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: alexbatashev/dpcpp_trace_build:latest
-    volumes:
+    container:
+      image: alexbatashev/dpcpp_trace_build:latest
+      volumes:
         - ${{ github.workspace }}:${{ github.workspace }}
     steps:
       - uses: actions/checkout@v2
