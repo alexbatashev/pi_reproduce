@@ -24,7 +24,7 @@ jobs:
       - name: Build
         run: |
           git clone https://github.com/KhronosGroup/OpenCL-Headers.git
-          sudo mv OpenCL-Headers/CL /usr/include/
+          mv OpenCL-Headers/CL /usr/include/
           mkdir build
           mkdir install
           cd build
