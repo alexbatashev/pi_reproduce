@@ -2,13 +2,14 @@
 
 #include <filesystem>
 #include <string>
+#include <string_view>
 #include <vector>
 
 class options {
 public:
   enum class mode { record, replay, print, info };
   enum class print_group_by { none, thread };
-  options(int argc, char *argv[]);
+  options(int argc, char *argv[], char *env[]);
 
   mode command() const noexcept { return mMode; }
 
@@ -27,6 +28,8 @@ public:
     return mExecutablePath.parent_path();
   }
 
+  auto env() const noexcept { return mEnvVars; }
+
 private:
   void parseRecordOptions(int argc, char *argv[]);
   void parseReplayOptions(int argc, char *argv[]);
@@ -40,4 +43,5 @@ private:
   print_group_by mPringGroup = print_group_by::none;
   bool mPrintPerformanceSummary = false;
   bool mVerbose = false;
+  std::vector<std::string_view> mEnvVars;
 };

@@ -128,10 +128,15 @@ void options::parsePrintOptions(int argc, char *argv[]) {
   }
 }
 
-options::options(int argc, char *argv[]) {
+options::options(int argc, char *argv[], char *env[]) {
   if (argc < 2) {
-    std::cerr << "Use prp info to see available options";
+    std::cerr << "Use dpcpp_trace info to see available options";
     std::terminate();
+  }
+
+  size_t i = 0;
+  while (env[i] != nullptr) {
+    mEnvVars.emplace_back(env[i++]);
   }
 
   std::array<char, 1024> buf;
