@@ -1,8 +1,8 @@
-# pi_reproduce
+# DPC++ trace utility
 
 **!!!WARNING!!! UNDER CONSTRUCTION**
 
-pi_reproduce is a simple utility that facilitates debugging of both oneAPI DPC++
+dpcpp_trace is a simple utility that facilitates debugging of both oneAPI DPC++
 runtime and user applications that use it.
 
 **Features**
@@ -17,10 +17,10 @@ runtime and user applications that use it.
 
 1. Download and build DPC++: https://intel.github.io/llvm-docs/GetStartedGuide.html#build-dpc-toolchain
 
-2. Download and build pi_reproduce:
+2. Download and build dpcpp_trace:
 
 ```bash
-git clone --recursive https://github.com/alexbatashev/pi_reproduce.git
+git clone --recursive https://github.com/alexbatashev/dpcpp_trace.git
 cd pi_reproduce
 mkdir build && cd build
 cmake -DINTEL_LLVM_PATH=/path/to/intel/llvm/src/dir -GNinja ..
@@ -38,23 +38,23 @@ prp record -o /path/to/output/dir ./myapp -- --app-arg1 --app-arg2=foo
 Simple mode (similar to `SYCL_PI_TRACE`):
 
 ```bash
-prp print /path/to/output/dir
+dpcpp_trace print /path/to/output/dir
 ```
 
 Group per thread:
 
 ```bash
-prp print /path/to/output/dir --group thread
+dpcpp_trace print /path/to/output/dir --group thread
 ```
 
 Verbose mode:
 
 ```bash
-prp print /path/to/output/dir --verbose
+dpcpp_trace print /path/to/output/dir --verbose
 ```
 
 Performance summary:
 
 ```bash
-prp print /path/to/output/dir --perf
+dpcpp_trace print /path/to/output/dir --perf
 ```

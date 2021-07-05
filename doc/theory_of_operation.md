@@ -2,7 +2,7 @@
 
 ## Capturing PI call trace
 
-`pi_reproduce` uses XPTI to intercept SYCL runtime calls to Plugin Interface and
+`dpcpp_trace` uses XPTI to intercept SYCL runtime calls to Plugin Interface and
 captures API call arguments. The `record` command inserts a few environment
 variables with the help of `execve` call:
 
@@ -54,7 +54,7 @@ string.
 
 ### Handling multithreading
 
-`pi_reproduce` records traces per each thread. To be able to reliably
+`dpcpp_trace` records traces per each thread. To be able to reliably
 distinguish between thread, the tool injects a library, that intercepts
 `pthread_create` function and assigns each thread a unique name. The first
 thread is always named `main`. On thread creation, newly thread is assigned name
@@ -84,7 +84,7 @@ TBD describe device image descriptors.
 ### Emulating plugins
 
 Plugin emulation relies on SYCL runtime's plugin override capability.
-`pi_reproduce` provides a PI plugin implementation, that reads trace files and
+`dpcpp_trace` provides a PI plugin implementation, that reads trace files and
 responses PI calls with that info.
 
 Trace files are read sequentially, so, it is essential for the program to have
