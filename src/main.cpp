@@ -1,17 +1,42 @@
 #include "common.hpp"
 #include "options.hpp"
 
+#include <fmt/color.h>
+#include <fmt/core.h>
 #include <iostream>
 #include <unistd.h>
 #include <vector>
 
 static void printInfo() {
-  std::cout << "pi reproducer\n";
-  std::cout << "\nCommands:\n\n";
-  std::cout << "\trecord   records execution information\n";
-  std::cout << "\tprint    prints trace\n";
-  std::cout << "\treplay   executes trace\n";
-  std::cout << "\tinfo     prints this message\n";
+  fmt::print("DPC++ trace utility\n");
+  fmt::print("Available commands\n");
+  fmt::print("{:>10} - {}\n", "info", "displays this guide");
+  fmt::print("{:>10} - {}\n", "record", "records DPC++ application trace");
+  fmt::print("{:>10} - {}\n", "print", "prints recorded traces");
+  fmt::print("{:>10} - {}\n\n\n", "replay", "replays recorded traces");
+
+  fmt::print(fmt::emphasis::bold, "record\n");
+  fmt::print("\tUsage: dpcpp_trace record [OPTIONS] executable -- application "
+             "args\n\n");
+  fmt::print("\tOptions:\n");
+  fmt::print("\t{:20} - {}\n", "--output, -o", "output directory, required.");
+
+  fmt::print(fmt::emphasis::bold, "\n\nprint\n");
+  fmt::print("\tUsage: dpcpp_trace print [OPTIONS] path/to/trace/dir\n\n");
+  fmt::print("\tOptions:\n");
+  fmt::print(
+      "\t{:20} - {}\n", "--group <mode>",
+      "group PI call traces, available modes: none, thread; default: none");
+  fmt::print("\t{:20} - {}\n", "--verbose",
+             "print as much info about call as possible");
+  fmt::print("\t{:20} - {}\n", "--perf", "print performance summary");
+
+  fmt::print(fmt::emphasis::bold, "\n\nreplay\n");
+  fmt::print("\tUsage: dpcpp_trace replay [OPTIONS] executable -- application "
+             "args\n\n");
+  fmt::print("\tOptions:\n");
+  fmt::print("\t{:20} - {}\n", "--output, -o",
+             "path to trace directory, required");
 }
 
 int main(int argc, char *argv[]) {

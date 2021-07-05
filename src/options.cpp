@@ -149,7 +149,7 @@ options::options(int argc, char *argv[]) {
   } else if (command == "print") {
     mMode = mode::print;
     parsePrintOptions(argc, argv);
-  } else if (command == "info") {
+  } else if (command == "info" || command == "--help" || command == "-h") {
     mMode = mode::info;
   }
 }
