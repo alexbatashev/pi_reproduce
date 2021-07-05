@@ -23,10 +23,16 @@ public:
 
   const std::vector<std::string> &args() const noexcept { return mArguments; }
 
+  std::filesystem::path location() const noexcept {
+    return mExecutablePath.parent_path();
+  }
+
 private:
   void parseRecordOptions(int argc, char *argv[]);
   void parseReplayOptions(int argc, char *argv[]);
   void parsePrintOptions(int argc, char *argv[]);
+
+  std::filesystem::path mExecutablePath;
   std::filesystem::path mInput;
   std::filesystem::path mOutput;
   std::vector<std::string> mArguments;
