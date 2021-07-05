@@ -10,3 +10,5 @@ target_include_directories(dpcpp_trace PRIVATE
   ${INTEL_LLVM_PATH}/sycl/source
   ${INTEL_LLVM_PATH}/sycl/tools/xpti_helpers
   ${INTEL_LLVM_PATH}/xpti/include)
+
+install(TARGETS dpcpp_trace DESTINATION bin)

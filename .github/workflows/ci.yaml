@@ -1,0 +1,37 @@
+name: CI pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: "0 3 * * *"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: alexbatashev/dpcpp_trace_build:latest
+    volumes:
+        - ${{ github.workspace }}:${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build
+        run: |
+          mkdir build
+          mkdir install
+          cd build
+          cmake -DINTEL_LLVM_PATH=/src/llvm -GNinja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install ..
+          ninja
+      - name: Install
+        run: ninja install
+      - name: Pack
+        run: tar -czvf dpcpp_trace.tar.gz -C $GITHUB_WORKSPACE/install .
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v1
+        with:
+          name: dpcpp_trace
+          path: dpcpp_trace.tar.gz
+
