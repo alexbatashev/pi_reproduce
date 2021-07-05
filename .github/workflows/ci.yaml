@@ -31,7 +31,7 @@ jobs:
           cmake -DINTEL_LLVM_PATH=/src/llvm -GNinja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install ..
           ninja
       - name: Install
-        run: ninja install
+        run: cd build && ninja install
       - name: Pack
         run: tar -czvf dpcpp_trace.tar.gz -C $GITHUB_WORKSPACE/install .
       - name: Upload artifacts
