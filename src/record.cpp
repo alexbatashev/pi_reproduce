@@ -3,13 +3,12 @@
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <unistd.h>
 
 void record(const options &opts) {
-  const auto &args = opts.args();
-
   if (std::filesystem::exists(opts.output())) {
     std::cerr << "Output path " << opts.output() << " already exists\n";
     std::terminate();
@@ -19,6 +18,21 @@ void record(const options &opts) {
     std::cerr << "Failed to create directory " << opts.output() << "\n";
     std::terminate();
   }
+
+  std::ofstream env{opts.output() / "env"};
+  for (auto entry : opts.env()) {
+    env << entry << "\n";
+  }
+  env.close();
+
+  const auto &args = opts.args();
+
+  std::ofstream command{opts.output() / "command.txt"};
+  command << opts.input();
+  for (const auto &arg : args) {
+    command << " " << arg;
+  }
+  command.close();
 
   const char *cArgs[args.size() + 2];
 
@@ -42,15 +56,21 @@ void record(const options &opts) {
       (opts.location() / ".." / "lib" / "system_intercept").string() + ":";
   ldLibraryPath += std::string(std::getenv("LD_LIBRARY_PATH"));
 
-  const char *const env[] = {"XPTI_TRACE_ENABLE=1",
-                             "XPTI_FRAMEWORK_DISPATCHER=libxptifw.so",
-                             "LD_PRELOAD=libsystem_intercept.so",
-                             ldLibraryPath.c_str(),
-                             "XPTI_SUBSCRIBERS=libplugin_record.so",
-                             outPath.c_str(),
-                             nullptr};
+  std::vector<const char *> cEnv;
+  cEnv.reserve(opts.env().size() + 6);
+  for (auto e : opts.env()) {
+    if (e.find("LD_LIBRARY_PATH") == std::string::npos)
+      cEnv.push_back(e.data());
+  }
+  cEnv.push_back("XPTI_TRACE_ENABLE=1");
+  cEnv.push_back("XPTI_FRAMEWORK_DISPATCHER=libxptifw.so");
+  cEnv.push_back("LD_PRELOAD=libsystem_intercept.so");
+  cEnv.push_back(ldLibraryPath.c_str());
+  cEnv.push_back("XPTI_SUBSCRIBERS=libplugin_record.so");
+  cEnv.push_back(outPath.c_str());
+  cEnv.push_back(nullptr);
   auto err = execve(opts.input().c_str(), const_cast<char *const *>(cArgs),
-                    const_cast<char *const *>(env));
+                    const_cast<char *const *>(cEnv.data()));
   if (err) {
     std::cerr << "Unexpected error while running executable: " << errno << "\n";
   }

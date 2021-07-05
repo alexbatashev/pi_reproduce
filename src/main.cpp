@@ -39,8 +39,8 @@ static void printInfo() {
              "path to trace directory, required");
 }
 
-int main(int argc, char *argv[]) {
-  options opts{argc, argv};
+int main(int argc, char *argv[], char *env[]) {
+  options opts{argc, argv, env};
 
   if (opts.command() == options::mode::info) {
     printInfo();

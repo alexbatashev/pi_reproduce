@@ -32,16 +32,23 @@ void replay(const options &opts) {
       (opts.location() / ".." / "lib" / "system_intercept").string() + ":";
   ldLibraryPath += std::string(std::getenv("LD_LIBRARY_PATH"));
 
-  const char *const env[] = {ldLibraryPath.c_str(),
-                             "LD_PRELOAD=libsystem_intercept.so",
-                             "SYCL_OVERRIDE_PI_OPENCL=libplugin_replay.so",
-                             "SYCL_OVERRIDE_PI_LEVEL_ZERO=libplugin_replay.so",
-                             "SYCL_OVERRIDE_PI_CUDA=libplugin_replay.so",
-                             "SYCL_OVERRIDE_PI_ROCM=libplugin_replay.so",
-                             outPath.c_str(),
-                             nullptr};
+  std::vector<const char *> cEnv;
+  cEnv.reserve(opts.env().size() + 6);
+  for (auto e : opts.env()) {
+    if (e.find("LD_LIBRARY_PATH") == std::string::npos)
+      cEnv.push_back(e.data());
+  }
+  cEnv.push_back("LD_PRELOAD=libsystem_intercept.so");
+  cEnv.push_back("SYCL_OVERRIDE_PI_OPENCL=libplugin_replay.so");
+  cEnv.push_back("SYCL_OVERRIDE_PI_LEVEL_ZERO=libplugin_replay.so");
+  cEnv.push_back("SYCL_OVERRIDE_PI_CUDA=libplugin_replay.so");
+  cEnv.push_back("SYCL_OVERRIDE_PI_ROCM=libplugin_replay.so");
+  cEnv.push_back(ldLibraryPath.c_str());
+  cEnv.push_back(outPath.c_str());
+  cEnv.push_back(nullptr);
+
   auto err = execve(opts.input().c_str(), const_cast<char *const *>(cArgs),
-                    const_cast<char *const *>(env));
+                    const_cast<char *const *>(cEnv.data()));
   if (err) {
     std::cerr << "Unexpected error while running executable: " << errno << "\n";
   }
