@@ -10,6 +10,16 @@
 void record(const options &opts) {
   const auto &args = opts.args();
 
+  if (std::filesystem::exists(opts.output())) {
+    std::cerr << "Output path " << opts.output() << " already exists\n";
+    std::terminate();
+  }
+
+  if (!std::filesystem::create_directory(opts.output())) {
+    std::cerr << "Failed to create directory " << opts.output() << "\n";
+    std::terminate();
+  }
+
   const char *cArgs[args.size() + 2];
 
   int i = 0;
@@ -21,8 +31,17 @@ void record(const options &opts) {
 
   std::string outPath =
       std::string("PI_REPRODUCE_TRACE_PATH=") + opts.output().c_str();
-  std::string ldLibraryPath =
-      "LD_LIBRARY_PATH=" + std::string(std::getenv("LD_LIBRARY_PATH"));
+
+  std::string ldLibraryPath = "LD_LIBRARY_PATH=";
+  ldLibraryPath += (opts.location() / ".." / "lib").string() + ":";
+  ldLibraryPath +=
+      (opts.location() / ".." / "lib" / "plugin_replay").string() + ":";
+  ldLibraryPath +=
+      (opts.location() / ".." / "lib" / "plugin_record").string() + ":";
+  ldLibraryPath +=
+      (opts.location() / ".." / "lib" / "system_intercept").string() + ":";
+  ldLibraryPath += std::string(std::getenv("LD_LIBRARY_PATH"));
+
   const char *const env[] = {"XPTI_TRACE_ENABLE=1",
                              "XPTI_FRAMEWORK_DISPATCHER=libxptifw.so",
                              "LD_PRELOAD=libsystem_intercept.so",

@@ -21,9 +21,19 @@ void replay(const options &opts) {
 
   std::string outPath =
       std::string("PI_REPRODUCE_TRACE_PATH=") + opts.output().c_str();
-  std::string ldLibraryPath =
-      "LD_LIBRARY_PATH=" + std::string(std::getenv("LD_LIBRARY_PATH"));
+
+  std::string ldLibraryPath = "LD_LIBRARY_PATH=";
+  ldLibraryPath += (opts.location() / ".." / "lib").string() + ":";
+  ldLibraryPath +=
+      (opts.location() / ".." / "lib" / "plugin_replay").string() + ":";
+  ldLibraryPath +=
+      (opts.location() / ".." / "lib" / "plugin_record").string() + ":";
+  ldLibraryPath +=
+      (opts.location() / ".." / "lib" / "system_intercept").string() + ":";
+  ldLibraryPath += std::string(std::getenv("LD_LIBRARY_PATH"));
+
   const char *const env[] = {ldLibraryPath.c_str(),
+                             "LD_PRELOAD=libsystem_intercept.so",
                              "SYCL_OVERRIDE_PI_OPENCL=libplugin_replay.so",
                              "SYCL_OVERRIDE_PI_LEVEL_ZERO=libplugin_replay.so",
                              "SYCL_OVERRIDE_PI_CUDA=libplugin_replay.so",

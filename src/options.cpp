@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <string_view>
+#include <unistd.h>
 
 static void parseInfoOptions(int argc, const char *argv[]) {
   (void)argv;
@@ -132,6 +133,10 @@ options::options(int argc, char *argv[]) {
     std::cerr << "Use prp info to see available options";
     std::terminate();
   }
+
+  std::array<char, 1024> buf;
+  readlink("/proc/self/exe", buf.data(), buf.size());
+  mExecutablePath = std::filesystem::path{buf.data()};
 
   std::string_view command(argv[1]);
 
