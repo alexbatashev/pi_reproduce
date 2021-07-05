@@ -19,6 +19,8 @@ jobs:
         - ${{ github.workspace }}:${{ github.workspace }}
     steps:
       - uses: actions/checkout@v2
+        with:
+          recursive: true
       - name: Build
         run: |
           mkdir build
