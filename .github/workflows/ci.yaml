@@ -23,6 +23,8 @@ jobs:
           submodules: true
       - name: Build
         run: |
+          apt update
+          apt install -yqq opencl-headers
           mkdir build
           mkdir install
           cd build
