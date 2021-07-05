@@ -23,8 +23,8 @@ jobs:
           submodules: true
       - name: Build
         run: |
-          apt update
-          apt install -yqq opencl-headers
+          git clone https://github.com/KhronosGroup/OpenCL-Headers.git
+          sudo mv OpenCL-Headers/CL /usr/include/
           mkdir build
           mkdir install
           cd build
