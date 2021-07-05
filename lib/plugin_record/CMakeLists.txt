@@ -6,3 +6,4 @@ target_include_directories(plugin_record PRIVATE
   ${INTEL_LLVM_PATH}/sycl/include
   ${INTEL_LLVM_PATH}/sycl/tools/xpti_helpers
   ${INTEL_LLVM_PATH}/xpti/include)
+install(TARGETS plugin_record DESTINATION lib)
