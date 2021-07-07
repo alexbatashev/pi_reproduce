@@ -13,7 +13,6 @@ void record(const options &opts) {
     std::cerr << "Output path " << opts.output() << " already exists\n";
     std::terminate();
   }
-
   if (!std::filesystem::create_directory(opts.output())) {
     std::cerr << "Failed to create directory " << opts.output() << "\n";
     std::terminate();
@@ -54,6 +53,8 @@ void record(const options &opts) {
       (opts.location() / ".." / "lib" / "plugin_record").string() + ":";
   ldLibraryPath +=
       (opts.location() / ".." / "lib" / "system_intercept").string() + ":";
+  ldLibraryPath +=
+      (opts.location() / ".." / "lib" / "graph_dump").string() + ":";
   ldLibraryPath += std::string(std::getenv("LD_LIBRARY_PATH"));
 
   std::vector<const char *> cEnv;
@@ -66,7 +67,7 @@ void record(const options &opts) {
   cEnv.push_back("XPTI_FRAMEWORK_DISPATCHER=libxptifw.so");
   cEnv.push_back("LD_PRELOAD=libsystem_intercept.so");
   cEnv.push_back(ldLibraryPath.c_str());
-  cEnv.push_back("XPTI_SUBSCRIBERS=libplugin_record.so");
+  cEnv.push_back("XPTI_SUBSCRIBERS=libgraph_dump.so,libplugin_record.so");
   cEnv.push_back(outPath.c_str());
   cEnv.push_back(nullptr);
   auto err = execve(opts.input().c_str(), const_cast<char *const *>(cArgs),
