@@ -138,10 +138,8 @@ void printMapFlags(pi_map_flags bitfield) {
   fmt::print("{:>15} : {:#x} ({})\n", "<pi_map_flags>", bitfield, join(values));
 }
 
-template <sycl::detail::PiApiKind Kind, typename T> struct PrintHelper {};
-
 template <sycl::detail::PiApiKind Kind, typename T, typename... Ts>
-struct PrintHelper<Kind, std::tuple<T, Ts...>> {
+struct PrintHelper {
   static void print(T arg, Ts... args) {
     using PI = sycl::detail::PiApiKind;
     if constexpr (Kind == PI::piMemBufferCreate && sizeof...(Ts) == 4) {
@@ -160,7 +158,12 @@ struct PrintHelper<Kind, std::tuple<T, Ts...>> {
       printFormatted<T>(arg);
     }
     if constexpr (sizeof...(Ts) > 0) {
-      PrintHelper<Kind, std::tuple<Ts...>>::print(args...);
+      PrintHelper<Kind, Ts...>::print(args...);
     }
   }
 };
+
+template <sycl::detail::PiApiKind Kind, typename... Ts>
+void printArgs(Ts... args) {
+  PrintHelper<Kind, Ts...>::print(args...);
+}

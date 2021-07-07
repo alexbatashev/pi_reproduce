@@ -206,8 +206,7 @@ void printTrace(const options &opts) {
                             std::optional<pi_result>, auto... Args) {          \
     std::cout << "---> " << #api << "("                                        \
               << "\n";                                                         \
-    PrintHelper<sycl::detail::PiApiKind::api, std::tuple<__VA_ARGS__>>::print( \
-        Args...);                                                              \
+    printArgs<sycl::detail::PiApiKind::api>(Args...);                          \
     std::cout << ") ---> ";                                                    \
   });
 #include <CL/sycl/detail/pi.def>
