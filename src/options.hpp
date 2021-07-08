@@ -9,6 +9,7 @@ class options {
 public:
   enum class mode { record, replay, print, info };
   enum class print_group_by { none, thread };
+
   options(int argc, char *argv[], char *env[]);
 
   mode command() const noexcept { return mMode; }

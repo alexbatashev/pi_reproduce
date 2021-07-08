@@ -4,6 +4,7 @@
 #include <fmt/color.h>
 #include <fmt/core.h>
 #include <iostream>
+#include <stdexcept>
 #include <unistd.h>
 #include <vector>
 
@@ -41,16 +42,21 @@ static void printInfo() {
 }
 
 int main(int argc, char *argv[], char *env[]) {
-  options opts{argc, argv, env};
+  try {
+    options opts{argc, argv, env};
 
-  if (opts.command() == options::mode::info) {
-    printInfo();
-  } else if (opts.command() == options::mode::record) {
-    record(opts);
-  } else if (opts.command() == options::mode::print) {
-    printTrace(opts);
-  } else if (opts.command() == options::mode::replay) {
-    replay(opts);
+    if (opts.command() == options::mode::info) {
+      printInfo();
+    } else if (opts.command() == options::mode::record) {
+      record(opts);
+    } else if (opts.command() == options::mode::print) {
+      printTrace(opts);
+    } else if (opts.command() == options::mode::replay) {
+      replay(opts);
+    }
+  } catch (std::runtime_error &err) {
+    std::cerr << "CLI error: " << err.what() << "\n";
+    return -1;
   }
   return 0;
 }
