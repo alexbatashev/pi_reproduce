@@ -20,6 +20,7 @@ static void printInfo() {
              "args\n\n");
   fmt::print("\tOptions:\n");
   fmt::print("\t{:20} - {}\n", "--output, -o", "output directory, required.");
+  fmt::print("\t{:20} - {}\n", "--skip-mem-objects, -s", "skip capture of memory objects.");
 
   fmt::print(fmt::emphasis::bold, "\n\nprint\n");
   fmt::print("\tUsage: dpcpp_trace print [OPTIONS] path/to/trace/dir\n\n");

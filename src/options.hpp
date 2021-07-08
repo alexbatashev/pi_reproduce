@@ -30,6 +30,8 @@ public:
 
   auto env() const noexcept { return mEnvVars; }
 
+  bool record_skip_mem_objects() const noexcept { return mRecordSkipMemObjs; }
+
 private:
   void parseRecordOptions(int argc, char *argv[]);
   void parseReplayOptions(int argc, char *argv[]);
@@ -44,4 +46,5 @@ private:
   bool mPrintPerformanceSummary = false;
   bool mVerbose = false;
   std::vector<std::string_view> mEnvVars;
+  bool mRecordSkipMemObjs = false;
 };

@@ -32,6 +32,8 @@ void options::parseRecordOptions(int argc, char *argv[]) {
         std::terminate();
       }
       mOutput = argv[++i];
+    } else if (opt == "--skip-mem-objects" || opt == "-s") {
+      mRecordSkipMemObjs = true;
     }
 
     i++;

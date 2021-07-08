@@ -1,4 +1,5 @@
 #include "common.hpp"
+#include "constants.hpp"
 
 #include <cstdlib>
 #include <exception>
@@ -57,7 +58,7 @@ void record(const options &opts) {
   ldLibraryPath += std::string(std::getenv("LD_LIBRARY_PATH"));
 
   std::vector<const char *> cEnv;
-  cEnv.reserve(opts.env().size() + 6);
+  cEnv.reserve(opts.env().size() + 7);
   for (auto e : opts.env()) {
     if (e.find("LD_LIBRARY_PATH") == std::string::npos)
       cEnv.push_back(e.data());
@@ -68,7 +69,15 @@ void record(const options &opts) {
   cEnv.push_back(ldLibraryPath.c_str());
   cEnv.push_back("XPTI_SUBSCRIBERS=libplugin_record.so");
   cEnv.push_back(outPath.c_str());
+
+  std::string skipVal = kSkipMemObjsEnvVar;
+  skipVal += "=1";
+  if (opts.record_skip_mem_objects()) {
+    cEnv.push_back(skipVal.c_str());
+  }
+
   cEnv.push_back(nullptr);
+
   auto err = execve(opts.input().c_str(), const_cast<char *const *>(cArgs),
                     const_cast<char *const *>(cEnv.data()));
   if (err) {

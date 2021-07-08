@@ -1,5 +1,6 @@
-#include <CL/sycl/detail/xpti_plugin_info.hpp>
+#include "constants.hpp"
 
+#include <CL/sycl/detail/xpti_plugin_info.hpp>
 #include "pi_arguments_handler.hpp"
 #include "xpti_trace_framework.h"
 
@@ -24,6 +25,14 @@ thread_local std::ofstream RecordData;
 sycl::xpti_helpers::PiArgumentsHandler ArgHandler;
 
 std::chrono::time_point<std::chrono::steady_clock> GStartTime;
+
+static bool shouldSkipMemObjects() {
+  static bool res = getenv(kSkipMemObjsEnvVar) != nullptr;
+  if (res) {
+    std::cout << "has skip\n";
+  }
+  return res;
+}
 
 template <typename... Ts> struct write_helper;
 
@@ -202,10 +211,12 @@ void handleEnqueueMemBufferMap(sycl::detail::XPTIPluginInfo Plugin,
                                size_t size, pi_uint32 num_events_in_wait_list,
                                const pi_event *event_wait_list, pi_event *event,
                                void **ret_map) {
-  // Wait for map to finish
-  Plugin.plugin.PiFunctionTable.piEventsWait(1, event);
+  // Wait for map to finish. There's no need to wait, if user asked to skip mem
+  // objects. This will provide more accurate performance statistics.
+  if (shouldSkipMemObjects())
+    Plugin.plugin.PiFunctionTable.piEventsWait(1, event);
 
-  size_t numOutputs = 1;
+  size_t numOutputs = shouldSkipMemObjects() ? 0 : 1;
 
   const auto saveFunc = [numOutputs](auto... args) {
     size_t totalSize = (sizeof(decltype(args)) + ...);
@@ -220,8 +231,11 @@ void handleEnqueueMemBufferMap(sycl::detail::XPTIPluginInfo Plugin,
   saveFunc(command_queue, buffer, blocking_map, map_flags, offset, size,
            num_events_in_wait_list, event_wait_list, event, ret_map);
 
-  RecordData.write(reinterpret_cast<const char *>(&size), sizeof(size_t));
-  RecordData.write(static_cast<const char *>(*ret_map), size);
+  if (!shouldSkipMemObjects()) {
+    std::cout << "Record " << numOutputs << " outputs\n";
+    RecordData.write(reinterpret_cast<const char *>(&size), sizeof(size_t));
+    RecordData.write(static_cast<const char *>(*ret_map), size);
+  }
 }
 
 void handleEnqueueMemBufferRead(sycl::detail::XPTIPluginInfo Plugin,
@@ -232,9 +246,12 @@ void handleEnqueueMemBufferRead(sycl::detail::XPTIPluginInfo Plugin,
                                 const pi_event *event_wait_list,
                                 pi_event *event) {
 
-  Plugin.plugin.PiFunctionTable.piEventsWait(1, event);
+  // Wait for read to finish. There's no need to wait, if user asked to skip mem
+  // objects. This will provide more accurate performance statistics.
+  if (shouldSkipMemObjects())
+    Plugin.plugin.PiFunctionTable.piEventsWait(1, event);
 
-  size_t numOutputs = 1;
+  size_t numOutputs = shouldSkipMemObjects() ? 0 : 1;
 
   const auto saveFunc = [numOutputs](auto... args) {
     size_t totalSize = (sizeof(decltype(args)) + ...);
@@ -249,8 +266,11 @@ void handleEnqueueMemBufferRead(sycl::detail::XPTIPluginInfo Plugin,
   saveFunc(queue, buffer, blocking_read, offset, size, ptr,
            num_events_in_wait_list, event_wait_list, event);
 
-  RecordData.write(reinterpret_cast<const char *>(&size), sizeof(size_t));
-  RecordData.write(static_cast<const char *>(ptr), size);
+  if (!shouldSkipMemObjects()) {
+    std::cout << "Record " << numOutputs << " outputs\n";
+    RecordData.write(reinterpret_cast<const char *>(&size), sizeof(size_t));
+    RecordData.write(static_cast<const char *>(ptr), size);
+  }
 }
 
 void handleKernelGetGroupInfo(sycl::detail::XPTIPluginInfo,
