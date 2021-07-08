@@ -1,9 +1,11 @@
 add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/fmt ${PROJECT_BINARY_DIR}/fmt)
 
-set(CMAKE_BUILD_RPATH ${CMAKE_BINARY_DIR}/lib/plugin_record)
-add_executable(dpcpp_trace record.cpp replay.cpp print.cpp options.cpp main.cpp)
+add_library(options STATIC options.cpp)
 
-target_link_libraries(dpcpp_trace PRIVATE -ldl -lpthread fmt)
+set(CMAKE_BUILD_RPATH ${CMAKE_BINARY_DIR}/lib/plugin_record)
+add_executable(dpcpp_trace record.cpp replay.cpp print.cpp main.cpp)
+
+target_link_libraries(dpcpp_trace PRIVATE options -ldl -lpthread fmt)
 
 target_include_directories(dpcpp_trace PRIVATE
   ${PROJECT_SOURCE_DIR}/include
