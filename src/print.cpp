@@ -1,6 +1,7 @@
 #include "common.hpp"
 #include "options.hpp"
 #include "pretty_printers.hpp"
+#include "trace_reader.hpp"
 
 #include "pi_arguments_handler.hpp"
 #include <CL/sycl/detail/pi.h>
@@ -58,18 +59,6 @@ static void printKernelCreate(void *data) {
   std::cout << ") ---> ";
 }
 
-struct Record {
-  uint32_t functionId;
-  uint8_t backend;
-  size_t numInputs;
-  size_t numOutputs;
-  pi_result result;
-  std::vector<char> argsData;
-  std::string threadId;
-  uint64_t start;
-  uint64_t end;
-};
-
 struct PerformanceSummary {
   size_t totalCalls;
   size_t maxDuration = std::numeric_limits<size_t>::min();
@@ -80,44 +69,12 @@ struct PerformanceSummary {
 void parseTraceFile(std::vector<Record> &records, std::filesystem::path path) {
   std::ifstream trace{path, std::ios::binary};
   while (!trace.eof()) {
-    uint32_t functionId;
-    uint8_t backend;
-    uint64_t start;
-    uint64_t end;
-    size_t numInputs;
-    size_t numOutputs;
-    size_t totalSize;
-    pi_result result;
+    Record record = getNextRecord(trace, path.stem().filename().string());
 
-    trace.read(reinterpret_cast<char *>(&functionId), sizeof(uint32_t));
-    trace.read(reinterpret_cast<char *>(&backend), sizeof(uint8_t));
-    trace.read(reinterpret_cast<char *>(&start), sizeof(uint64_t));
-    trace.read(reinterpret_cast<char *>(&end), sizeof(uint64_t));
-    trace.read(reinterpret_cast<char *>(&numInputs), sizeof(size_t));
-    trace.read(reinterpret_cast<char *>(&numOutputs), sizeof(size_t));
-    trace.read(reinterpret_cast<char *>(&totalSize), sizeof(size_t));
+    if (trace.eof())
+      break;
 
-    Record record;
-    record.functionId = functionId;
-    record.backend = backend;
-    record.start = start;
-    record.end = end;
-    record.threadId = path.stem().filename().string();
-    record.numOutputs = numOutputs;
-
-    record.argsData.resize(totalSize);
-    trace.read(reinterpret_cast<char *>(record.argsData.data()), totalSize);
-
-    for (size_t i = 0; i < numOutputs; i++) {
-      size_t dataSize;
-      trace.read(reinterpret_cast<char *>(&dataSize), sizeof(size_t));
-      trace.seekg(dataSize, std::ios_base::cur); // skip output for now
-    }
-
-    trace.read(reinterpret_cast<char *>(&result), sizeof(pi_result));
-    record.result = result;
-
-    records.push_back(record);
+    records.push_back(std::move(record));
   }
 }
 
@@ -144,7 +101,7 @@ static void printRecord(sycl::xpti_helpers::PiArgumentsHandler &argHandler,
     fmt::print("{:<18} : {}\n", "Thread ID", r.threadId);
     fmt::print("{:<18} : {}\n", "Backend", getBackend(r.backend));
     fmt::print("{:<18} : {}\n", "Call duration", r.end - r.start);
-    fmt::print("{:<18} : {}\n\n", "Captured outputs", r.numOutputs);
+    fmt::print("{:<18} : {}\n\n", "Captured outputs", r.outputs.size());
   }
   using namespace sycl::detail;
   if (r.functionId == static_cast<uint32_t>(PiApiKind::piProgramBuild)) {
