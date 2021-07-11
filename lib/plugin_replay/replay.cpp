@@ -3,6 +3,7 @@
 #include <CL/sycl/detail/pi.hpp>
 
 #include <array>
+#include <cstring>
 #include <exception>
 #include <filesystem>
 #include <fstream>
@@ -225,7 +226,7 @@ pi_result piMemBufferCreate(pi_context context, pi_mem_flags flags, size_t size,
   ensureTraceOpened();
   Record record = getNextRecord(GTrace, "", true);
 
-  dieIfUnexpected(record.functionId, PiApiKind::piQueueFinish);
+  dieIfUnexpected(record.functionId, PiApiKind::piMemBufferCreate);
   *ret_mem = reinterpret_cast<pi_mem>(new int{1});
   return record.result;
 }
@@ -416,10 +417,11 @@ pi_result piEnqueueMemBufferMap(pi_queue command_queue, pi_mem buffer,
 
   auto memory = new char[record.outputs[0].data.size()];
 
-  std::uninitialized_copy(record.outputs[0].data.begin(),
-                          record.outputs[0].data.end(), memory);
+  std::memcpy(memory, record.outputs[0].data.data(),
+              record.outputs[0].data.size());
 
   *ret_map = memory;
+  *event = reinterpret_cast<pi_event>(new int{1});
 
   return record.result;
 }
@@ -433,23 +435,16 @@ pi_result piEnqueueMemBufferRead(pi_queue queue, pi_mem buffer,
   ensureTraceOpened();
   Record record = getNextRecord(GTrace, "", true);
 
-  dieIfUnexpected(record.functionId, PiApiKind::piEnqueueMemBufferMap);
+  dieIfUnexpected(record.functionId, PiApiKind::piEnqueueMemBufferRead);
 
-  std::uninitialized_copy(record.outputs[0].data.begin(),
-                          record.outputs[0].data.end(),
-                          static_cast<char *>(ptr));
+  std::memcpy(ptr, record.outputs[0].data.data(),
+              record.outputs[0].data.size());
+  *event = reinterpret_cast<pi_event>(new int{1});
 
   return record.result;
 }
 
 pi_result piTearDown(void *) {
-  /*
-  ensureTraceOpened();
-  Record record = getNextRecord(GTrace, "", true);
-
-  dieIfUnexpected(record.functionId, PiApiKind::piTearDown);
-  return record.result;
-  */
   return PI_SUCCESS;
 }
 

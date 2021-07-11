@@ -84,7 +84,7 @@ XPTI_CALLBACK_API void tpCallback(uint16_t TraceType,
       auto fs = std::make_unique<std::ofstream>(
           outDir / filename, std::ios::out | std::ios::app | std::ios::binary);
       GRecordHandler =
-          new RecordHandler(std::move(fs), GStartTime, shouldSkipMemObjects());
+          new RecordHandler(std::move(fs), GStartTime, !shouldSkipMemObjects());
     }
 
     if (GRecordHandler) {
