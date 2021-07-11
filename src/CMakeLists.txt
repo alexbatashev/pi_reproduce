@@ -5,10 +5,12 @@ add_library(options STATIC options.cpp)
 set(CMAKE_BUILD_RPATH ${CMAKE_BINARY_DIR}/lib/plugin_record)
 add_executable(dpcpp_trace record.cpp replay.cpp print.cpp main.cpp)
 
-target_link_libraries(dpcpp_trace PRIVATE options -ldl -lpthread fmt)
+target_link_libraries(dpcpp_trace PRIVATE options -ldl -lpthread fmt
+  trace_reader)
 
 target_include_directories(dpcpp_trace PRIVATE
   ${PROJECT_SOURCE_DIR}/include
+  ${PROJECT_SOURCE_DIR}/lib/trace_reader
   ${INTEL_LLVM_PATH}/sycl/include
   ${INTEL_LLVM_PATH}/sycl/source
   ${INTEL_LLVM_PATH}/sycl/tools/xpti_helpers

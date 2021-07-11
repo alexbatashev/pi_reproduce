@@ -35,6 +35,13 @@ XPTI_CALLBACK_API void tpCallback(uint16_t trace_type,
                                   xpti::trace_event_data_t *event,
                                   uint64_t instance, const void *user_data);
 
+void __attribute__((destructor)) deinit() {
+  if (GRecordHandler) {
+    GRecordHandler->flush();
+    delete GRecordHandler;
+  }
+}
+
 XPTI_CALLBACK_API void xptiTraceInit(unsigned int major_version,
                                      unsigned int minor_version,
                                      const char *version_str,
