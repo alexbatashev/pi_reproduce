@@ -209,9 +209,9 @@ void printTrace(const options &opts) {
     perfMap.clear();
     std::cout << "~END THREAD : " << lastThread << "\n\n";
   } else {
-    /*std::sort(
+    std::sort(
         records.begin(), records.end(),
-        [](const Record &a, const Record &b) { return a.start < b.start; });*/
+        [](const Record &a, const Record &b) { return a.start < b.start; });
     for (auto &r : records) {
       std::cout << "THREAD : " << r.threadId << "\n";
       printRecord(argHandler, r, opts.verbose());
