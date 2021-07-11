@@ -4,6 +4,7 @@
 #include <fstream>
 #include <mutex>
 #include <nlohmann/json.hpp>
+#include <set>
 #include <string_view>
 
 using json = nlohmann::json;
@@ -14,6 +15,8 @@ std::mutex GIOMutex;
 json GGraph = json::array();
 
 std::ofstream GDumpFile;
+
+std::set<int64_t> GIDs;
 
 XPTI_CALLBACK_API void tpCallback(uint16_t trace_type,
                                   xpti::trace_event_data_t *parent,
@@ -84,7 +87,12 @@ XPTI_CALLBACK_API void tpCallback(uint16_t traceType,
     name = "<unknown>";
   }
 
-  uint64_t ID = event ? event->unique_id : 0;
+  int64_t ID = event ? event->unique_id : 0;
+
+  if (GIDs.count(ID) > 0) {
+    return;
+  }
+  GIDs.insert(ID);
 
   json obj;
 
@@ -94,6 +102,8 @@ XPTI_CALLBACK_API void tpCallback(uint16_t traceType,
   if (traceType ==
       static_cast<uint16_t>(xpti::trace_point_type_t::edge_create)) {
     obj["kind"] = "edge";
+    obj["source"] = event->source_id;
+    obj["target"] = event->target_id;
   } else {
     obj["kind"] = "node";
   }
