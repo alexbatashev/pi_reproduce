@@ -31,6 +31,8 @@ void options::parseRecordOptions(int argc, char *argv[]) {
       mOutput = argv[++i];
     } else if ((opt == "--skip-mem-objects" || opt == "-s") && !mRecordSkipMemObjs) {
       mRecordSkipMemObjs = true;
+    } else if (opt == "--no-fork" && !mNoFork) {
+      mNoFork = true;
     } else {
       throw std::runtime_error(std::string("unrecognized option ") + std::string(argv[i]));
     }
@@ -71,6 +73,8 @@ void options::parseReplayOptions(int argc, char *argv[]) {
         std::terminate();
       }
       mOutput = argv[++i];
+    } else if (opt == "--no-fork" && !mNoFork) {
+      mNoFork = true;
     }
 
     i++;
