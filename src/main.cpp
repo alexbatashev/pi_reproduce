@@ -14,7 +14,7 @@ static void printInfo() {
   fmt::print("{:>10} - {}\n", "info", "displays this guide");
   fmt::print("{:>10} - {}\n", "record", "records DPC++ application trace");
   fmt::print("{:>10} - {}\n", "print", "prints recorded traces");
-  fmt::print("{:>10} - {}\n\n\n", "replay", "replays recorded traces");
+  fmt::print("{:>10} - {}\n\n\n", "replay", "replays recorded PI traces");
 
   fmt::print(fmt::emphasis::bold, "record\n");
   fmt::print("\tUsage: dpcpp_trace record [OPTIONS] executable -- application "
@@ -34,11 +34,13 @@ static void printInfo() {
   fmt::print("\t{:20} - {}\n", "--perf", "print performance summary");
 
   fmt::print(fmt::emphasis::bold, "\n\nreplay\n");
-  fmt::print("\tUsage: dpcpp_trace replay [OPTIONS] executable -- application "
-             "args\n\n");
+  fmt::print("\tUsage: dpcpp_trace replay [OPTIONS] executable [-- application "
+             "args]\n\n");
   fmt::print("\tOptions:\n");
   fmt::print("\t{:20} - {}\n", "--output, -o",
              "path to trace directory, required");
+  fmt::print("\t{:20} - {}\n", "--print-only, -p",
+             "print the actual command, executed by this wrapper");
 }
 
 int main(int argc, char *argv[], char *env[]) {

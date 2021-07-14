@@ -46,7 +46,7 @@ void record(const options &opts) {
   }
   cArgs[i] = nullptr;
 
-  std::string outPath = std::string(kTracePathEnvVar) + opts.output().c_str();
+  std::string outPath = std::string(kTracePathEnvVar) + "=" + opts.output().c_str();
 
   std::string ldLibraryPath = "LD_LIBRARY_PATH=";
   ldLibraryPath += (opts.location() / ".." / "lib").string() + ":";
