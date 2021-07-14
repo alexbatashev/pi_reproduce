@@ -1,4 +1,5 @@
 #include "common.hpp"
+#include "constants.hpp"
 
 #include <cstdlib>
 #include <exception>
@@ -21,8 +22,7 @@ void replay(const options &opts) {
   }
   cArgs[i] = nullptr;
 
-  std::string outPath =
-      std::string("PI_REPRODUCE_TRACE_PATH=") + opts.output().c_str();
+  std::string outPath = std::string(kTracePathEnvVar) + opts.output().c_str();
 
   std::string ldLibraryPath = "LD_LIBRARY_PATH=";
   ldLibraryPath += (opts.location() / ".." / "lib").string() + ":";

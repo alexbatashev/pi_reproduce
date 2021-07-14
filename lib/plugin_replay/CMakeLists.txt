@@ -2,6 +2,7 @@ add_library(plugin_replay SHARED replay.cpp)
 
 target_link_libraries(plugin_replay PRIVATE -lpthread trace_reader)
 target_include_directories(plugin_replay PRIVATE
+  ${PROJECT_SOURCE_DIR}/include
   ${INTEL_LLVM_PATH}/sycl/include
   ${INTEL_LLVM_PATH}/sycl/tools/xpti_helpers
   ${INTEL_LLVM_PATH}/xpti/include)

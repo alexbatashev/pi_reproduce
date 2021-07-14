@@ -1,3 +1,4 @@
+#include "constants.hpp"
 #include "trace_reader.hpp"
 
 #include <CL/sycl/detail/pi.hpp>
@@ -20,7 +21,7 @@ std::map<pi_kernel, pi_program> GKernelProgramMap;
 
 static void ensureTraceOpened() {
   if (!GTrace.is_open()) {
-    std::filesystem::path traceDir{getenv("PI_REPRODUCE_TRACE_PATH")};
+    std::filesystem::path traceDir{getenv(kTracePathEnvVar)};
     std::array<char, 1024> buf;
     pthread_getname_np(pthread_self(), buf.data(), buf.size());
     std::string filename{buf.data()};

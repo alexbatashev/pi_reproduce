@@ -76,7 +76,7 @@ XPTI_CALLBACK_API void tpCallback(uint16_t TraceType,
   if (Type == xpti::trace_point_type_t::function_with_args_begin) {
     const auto start = std::chrono::steady_clock::now();
     if (GRecordHandler == nullptr) {
-      std::filesystem::path outDir{std::getenv("PI_REPRODUCE_TRACE_PATH")};
+      std::filesystem::path outDir{std::getenv(kTracePathEnvVar)};
       std::array<char, 1024> buf;
       pthread_getname_np(pthread_self(), buf.data(), buf.size());
       std::string filename{buf.data()};
