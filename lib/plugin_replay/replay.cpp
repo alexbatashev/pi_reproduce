@@ -1,22 +1,27 @@
+#include "constants.hpp"
+#include "trace_reader.hpp"
+
 #include <CL/sycl/detail/pi.hpp>
 
 #include <array>
+#include <cstring>
 #include <exception>
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <memory>
 #include <pthread.h>
 
 using namespace sycl::detail;
 
 size_t GOffset = 0;
-std::ifstream GTrace;
+thread_local std::ifstream GTrace;
 
 std::map<pi_kernel, pi_program> GKernelProgramMap;
 
 static void ensureTraceOpened() {
   if (!GTrace.is_open()) {
-    std::filesystem::path traceDir{getenv("PI_REPRODUCE_TRACE_PATH")};
+    std::filesystem::path traceDir{getenv(kTracePathEnvVar)};
     std::array<char, 1024> buf;
     pthread_getname_np(pthread_self(), buf.data(), buf.size());
     std::string filename{buf.data()};
@@ -27,25 +32,6 @@ static void ensureTraceOpened() {
   }
 }
 
-std::tuple<pi_uint32, size_t, size_t> readHeader() {
-  uint32_t functionId;
-  uint8_t backend;
-  uint64_t start;
-  uint64_t end;
-  size_t numInputs;
-  size_t numOutputs;
-  size_t totalSize;
-
-  GTrace.read(reinterpret_cast<char *>(&functionId), sizeof(uint32_t));
-  GTrace.read(reinterpret_cast<char *>(&backend), sizeof(uint8_t));
-  GTrace.read(reinterpret_cast<char *>(&start), sizeof(uint64_t));
-  GTrace.read(reinterpret_cast<char *>(&end), sizeof(uint64_t));
-  GTrace.read(reinterpret_cast<char *>(&numInputs), sizeof(size_t));
-  GTrace.read(reinterpret_cast<char *>(&numOutputs), sizeof(size_t));
-  GTrace.read(reinterpret_cast<char *>(&totalSize), sizeof(size_t));
-
-  return {functionId, numOutputs, totalSize};
-}
 void dieIfUnexpected(uint32_t funcId, PiApiKind expected) {
   if (funcId != static_cast<uint32_t>(expected)) {
     std::cerr << "Unexpected PI call\n";
@@ -53,54 +39,24 @@ void dieIfUnexpected(uint32_t funcId, PiApiKind expected) {
   }
 }
 
-static void skipArguments(size_t argSize) {
-  std::array<char, 8192> buf;
-  GTrace.read(buf.data(), argSize);
-}
-
-static void replayGetInfo(void *value, size_t *retSize) {
-  char *outPtr = value == nullptr ? reinterpret_cast<char *>(retSize)
-                                  : reinterpret_cast<char *>(value);
-  size_t outSize;
-  GTrace.read(reinterpret_cast<char *>(&outSize), sizeof(size_t));
-  GTrace.read(reinterpret_cast<char *>(outPtr), outSize);
-}
-
-static pi_result getResult() {
-  pi_result res;
-  GTrace.read(reinterpret_cast<char *>(&res), sizeof(pi_result));
-
-  return res;
-}
-
-static pi_result skipRecord() {
-  auto [funcId, numOutputs, totalSize] = readHeader();
-
-  skipArguments(totalSize);
-
-  for (size_t i = 0; i < numOutputs; i++) {
-    size_t dataSize;
-    GTrace.read(reinterpret_cast<char *>(&dataSize), sizeof(size_t));
-    GTrace.seekg(dataSize, std::ios_base::cur); // skip output
-  }
-
-  return getResult();
+void replayGetInfo(Record &record, void *paramValue, size_t *retSize) {
+  char *ptr = paramValue ? static_cast<char *>(paramValue)
+                         : reinterpret_cast<char *>(retSize);
+  std::uninitialized_copy(record.outputs[0].data.begin(),
+                          record.outputs[0].data.end(), ptr);
 }
 
 extern "C" {
 pi_result piPlatformsGet(pi_uint32 numEntries, pi_platform *platforms,
                          pi_uint32 *numPlatforms) {
   ensureTraceOpened();
-  auto [funcId, numOutputs, totalSize] = readHeader();
+  Record record = getNextRecord(GTrace, "", true);
 
-  dieIfUnexpected(funcId, PiApiKind::piPlatformsGet);
-
-  skipArguments(totalSize);
+  dieIfUnexpected(record.functionId, PiApiKind::piPlatformsGet);
 
   if (numPlatforms != nullptr) {
-    size_t size;
-    GTrace.read(reinterpret_cast<char *>(&size), sizeof(size_t));
-    GTrace.read(reinterpret_cast<char *>(numPlatforms), size);
+    *numPlatforms =
+        *reinterpret_cast<pi_uint32 *>(record.outputs[0].data.data());
   }
 
   if (numEntries > 0 && platforms != nullptr) {
@@ -109,38 +65,32 @@ pi_result piPlatformsGet(pi_uint32 numEntries, pi_platform *platforms,
     }
   }
 
-  return getResult();
+  return record.result;
 }
 
 pi_result piPlatformGetInfo(pi_platform platform, pi_platform_info param_name,
                             size_t param_value_size, void *param_value,
                             size_t *param_value_size_ret) {
   ensureTraceOpened();
-  auto [funcId, numOutputs, totalSize] = readHeader();
+  Record record = getNextRecord(GTrace, "", true);
 
-  dieIfUnexpected(funcId, PiApiKind::piPlatformGetInfo);
+  dieIfUnexpected(record.functionId, PiApiKind::piPlatformGetInfo);
 
-  skipArguments(totalSize);
+  replayGetInfo(record, param_value, param_value_size_ret);
 
-  replayGetInfo(param_value, param_value_size_ret);
-
-  return getResult();
+  return record.result;
 }
 
 pi_result piDevicesGet(pi_platform platform, pi_device_type type,
                        pi_uint32 numEntries, pi_device *devs,
                        pi_uint32 *numDevices) {
   ensureTraceOpened();
-  auto [funcId, numOutputs, totalSize] = readHeader();
+  Record record = getNextRecord(GTrace, "", true);
 
-  dieIfUnexpected(funcId, PiApiKind::piDevicesGet);
-
-  skipArguments(totalSize);
+  dieIfUnexpected(record.functionId, PiApiKind::piDevicesGet);
 
   if (numDevices != nullptr) {
-    size_t size;
-    GTrace.read(reinterpret_cast<char *>(&size), sizeof(size_t));
-    GTrace.read(reinterpret_cast<char *>(numDevices), size);
+    *numDevices = *reinterpret_cast<pi_uint32 *>(record.outputs[0].data.data());
   }
 
   if (numEntries > 0 && devs != nullptr) {
@@ -149,32 +99,36 @@ pi_result piDevicesGet(pi_platform platform, pi_device_type type,
     }
   }
 
-  return getResult();
+  return record.result;
 }
 
 pi_result piDeviceGetInfo(pi_device device, pi_device_info param_name,
                           size_t param_value_size, void *param_value,
                           size_t *param_value_size_ret) {
   ensureTraceOpened();
-  auto [funcId, numOutputs, totalSize] = readHeader();
+  Record record = getNextRecord(GTrace, "", true);
 
-  dieIfUnexpected(funcId, PiApiKind::piDeviceGetInfo);
+  dieIfUnexpected(record.functionId, PiApiKind::piDeviceGetInfo);
 
-  skipArguments(totalSize);
+  replayGetInfo(record, param_value, param_value_size_ret);
 
-  replayGetInfo(param_value, param_value_size_ret);
-
-  return getResult();
+  return record.result;
 }
 
 pi_result piDeviceRetain(pi_device) {
   ensureTraceOpened();
-  return skipRecord();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piDeviceRetain);
+  return record.result;
 }
 
 pi_result piDeviceRelease(pi_device) {
   ensureTraceOpened();
-  return skipRecord();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piDeviceRelease);
+  return record.result;
 }
 
 pi_result piContextCreate(const pi_context_properties *properties,
@@ -184,95 +138,111 @@ pi_result piContextCreate(const pi_context_properties *properties,
                                              size_t cb, void *user_data),
                           void *user_data, pi_context *ret_context) {
   ensureTraceOpened();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piContextCreate);
   *ret_context = reinterpret_cast<pi_context>(new int{1});
-  return skipRecord();
+  return record.result;
 }
 
 pi_result piContextGetInfo(pi_context context, pi_context_info param_name,
                            size_t param_value_size, void *param_value,
                            size_t *param_value_size_ret) {
   ensureTraceOpened();
-  auto [funcId, numOutputs, totalSize] = readHeader();
+  Record record = getNextRecord(GTrace, "", true);
 
-  dieIfUnexpected(funcId, PiApiKind::piContextGetInfo);
+  dieIfUnexpected(record.functionId, PiApiKind::piContextGetInfo);
 
-  skipArguments(totalSize);
+  replayGetInfo(record, param_value, param_value_size_ret);
 
-  replayGetInfo(param_value, param_value_size_ret);
-
-  return getResult();
+  return record.result;
 }
 
 pi_result piContextRelease(pi_context) {
   ensureTraceOpened();
-  return skipRecord();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piContextRelease);
+  return record.result;
 }
 
 pi_result piContextRetain(pi_context) {
   ensureTraceOpened();
-  return skipRecord();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piContextRetain);
+  return record.result;
 }
 
 pi_result piQueueCreate(pi_context context, pi_device device,
                         pi_queue_properties properties, pi_queue *queue) {
   ensureTraceOpened();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piQueueCreate);
   *queue = reinterpret_cast<pi_queue>(new int{1});
-  return skipRecord();
+  return record.result;
 }
 
 pi_result piQueueGetInfo(pi_queue command_queue, pi_queue_info param_name,
                          size_t param_value_size, void *param_value,
                          size_t *param_value_size_ret) {
   ensureTraceOpened();
-  auto [funcId, numOutputs, totalSize] = readHeader();
+  Record record = getNextRecord(GTrace, "", true);
 
-  dieIfUnexpected(funcId, PiApiKind::piQueueGetInfo);
+  dieIfUnexpected(record.functionId, PiApiKind::piQueueGetInfo);
 
-  skipArguments(totalSize);
+  replayGetInfo(record, param_value, param_value_size_ret);
 
-  replayGetInfo(param_value, param_value_size_ret);
-
-  return getResult();
+  return record.result;
 }
 
 pi_result piQueueRetain(pi_queue) {
   ensureTraceOpened();
-  return skipRecord();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piQueueRetain);
+  return record.result;
 }
 
 pi_result piQueueRelease(pi_queue command_queue) {
   ensureTraceOpened();
-  return skipRecord();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piQueueRelease);
+  return record.result;
 }
 
 pi_result piQueueFinish(pi_queue command_queue) {
   ensureTraceOpened();
-  return skipRecord();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piQueueFinish);
+  return record.result;
 }
 
 pi_result piMemBufferCreate(pi_context context, pi_mem_flags flags, size_t size,
                             void *host_ptr, pi_mem *ret_mem,
                             const pi_mem_properties *properties) {
   ensureTraceOpened();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piMemBufferCreate);
   *ret_mem = reinterpret_cast<pi_mem>(new int{1});
-  return skipRecord();
+  return record.result;
 }
 
 pi_result piextDeviceSelectBinary(pi_device device, pi_device_binary *binaries,
                                   pi_uint32 num_binaries,
                                   pi_uint32 *selected_binary_ind) {
   ensureTraceOpened();
-  auto [funcId, numOutputs, totalSize] = readHeader();
+  Record record = getNextRecord(GTrace, "", true);
 
-  dieIfUnexpected(funcId, PiApiKind::piextDeviceSelectBinary);
+  dieIfUnexpected(record.functionId, PiApiKind::piextDeviceSelectBinary);
+  *selected_binary_ind =
+      *reinterpret_cast<pi_uint32 *>(record.outputs[0].data.data());
 
-  skipArguments(totalSize);
-
-  size_t outSize = 0;
-  GTrace.read(reinterpret_cast<char *>(&outSize), sizeof(size_t));
-  GTrace.read(reinterpret_cast<char *>(selected_binary_ind), outSize);
-
-  return getResult();
+  return record.result;
 }
 
 pi_result piProgramCreateWithBinary(pi_context context, pi_uint32 num_devices,
@@ -282,8 +252,11 @@ pi_result piProgramCreateWithBinary(pi_context context, pi_uint32 num_devices,
                                     pi_int32 *binary_status,
                                     pi_program *ret_program) {
   ensureTraceOpened();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piProgramCreateWithBinary);
   *ret_program = reinterpret_cast<pi_program>(new int{1});
-  return skipRecord();
+  return record.result;
 }
 
 pi_result piProgramBuild(pi_program program, pi_uint32 num_devices,
@@ -292,68 +265,79 @@ pi_result piProgramBuild(pi_program program, pi_uint32 num_devices,
                                             void *user_data),
                          void *user_data) {
   ensureTraceOpened();
-  return skipRecord();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piProgramBuild);
+  return record.result;
 }
 
 pi_result piKernelCreate(pi_program program, const char *kernel_name,
                          pi_kernel *ret_kernel) {
   ensureTraceOpened();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piKernelCreate);
   *ret_kernel = reinterpret_cast<pi_kernel>(new int{1});
   GKernelProgramMap[*ret_kernel] = program;
-  return skipRecord();
+  return record.result;
 }
 
 pi_result piKernelSetExecInfo(pi_kernel kernel, pi_kernel_exec_info value_name,
                               size_t param_value_size,
                               const void *param_value) {
   ensureTraceOpened();
-  return skipRecord();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piKernelSetExecInfo);
+  return record.result;
 }
 
 pi_result piKernelGetInfo(pi_kernel kernel, pi_kernel_info param_name,
                           size_t param_value_size, void *param_value,
                           size_t *param_value_size_ret) {
   ensureTraceOpened();
-  auto [funcId, numOutputs, totalSize] = readHeader();
+  Record record = getNextRecord(GTrace, "", true);
 
-  dieIfUnexpected(funcId, PiApiKind::piKernelGetInfo);
+  dieIfUnexpected(record.functionId, PiApiKind::piKernelGetInfo);
 
-  skipArguments(totalSize);
-
-  replayGetInfo(param_value, param_value_size_ret);
+  replayGetInfo(record, param_value, param_value_size_ret);
 
   if (param_name == PI_KERNEL_INFO_PROGRAM && param_value) {
     *static_cast<pi_program *>(param_value) = GKernelProgramMap[kernel];
   }
 
-  return getResult();
+  return record.result;
 }
 pi_result piKernelGetGroupInfo(pi_kernel kernel, pi_device device,
                                pi_kernel_group_info param_name,
                                size_t param_value_size, void *param_value,
                                size_t *param_value_size_ret) {
   ensureTraceOpened();
-  auto [funcId, numOutputs, totalSize] = readHeader();
+  Record record = getNextRecord(GTrace, "", true);
 
-  dieIfUnexpected(funcId, PiApiKind::piKernelGetGroupInfo);
+  dieIfUnexpected(record.functionId, PiApiKind::piKernelGetGroupInfo);
 
-  skipArguments(totalSize);
+  replayGetInfo(record, param_value, param_value_size_ret);
 
-  replayGetInfo(param_value, param_value_size_ret);
-
-  return getResult();
+  return record.result;
 }
 
 pi_result piextKernelSetArgMemObj(pi_kernel kernel, pi_uint32 arg_index,
                                   const pi_mem *arg_value) {
   ensureTraceOpened();
-  return skipRecord();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piextKernelSetArgMemObj);
+  return record.result;
 }
 
 pi_result piKernelSetArg(pi_kernel kernel, pi_uint32 arg_index, size_t arg_size,
                          const void *arg_value) {
   ensureTraceOpened();
-  return skipRecord();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piKernelSetArg);
+  return record.result;
 }
 
 pi_result piEnqueueKernelLaunch(
@@ -362,42 +346,63 @@ pi_result piEnqueueKernelLaunch(
     const size_t *local_work_size, pi_uint32 num_events_in_wait_list,
     const pi_event *event_wait_list, pi_event *event) {
   ensureTraceOpened();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piEnqueueKernelLaunch);
   *event = reinterpret_cast<pi_event>(new int{1});
-  return skipRecord();
+  return record.result;
 }
 
 pi_result piEnqueueMemUnmap(pi_queue command_queue, pi_mem memobj,
                             void *mapped_ptr, pi_uint32 num_events_in_wait_list,
                             const pi_event *event_wait_list, pi_event *event) {
   ensureTraceOpened();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piEnqueueMemUnmap);
   *event = reinterpret_cast<pi_event>(new int{1});
   delete[] static_cast<char *>(mapped_ptr);
-  return skipRecord();
+  return record.result;
 }
 
 pi_result piEventsWait(pi_uint32 num_events, const pi_event *event_list) {
   ensureTraceOpened();
-  return skipRecord();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piEventsWait);
+  return record.result;
 }
 
 pi_result piEventRelease(pi_event) {
   ensureTraceOpened();
-  return skipRecord();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piEventRelease);
+  return record.result;
 }
 
 pi_result piMemRelease(pi_mem) {
   ensureTraceOpened();
-  return skipRecord();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piMemRelease);
+  return record.result;
 }
 
 pi_result piProgramRelease(pi_program) {
   ensureTraceOpened();
-  return skipRecord();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piProgramRelease);
+  return record.result;
 }
 
 pi_result piKernelRelease(pi_kernel) {
   ensureTraceOpened();
-  return skipRecord();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piKernelRelease);
+  return record.result;
 }
 
 pi_result piEnqueueMemBufferMap(pi_queue command_queue, pi_mem buffer,
@@ -407,22 +412,19 @@ pi_result piEnqueueMemBufferMap(pi_queue command_queue, pi_mem buffer,
                                 const pi_event *event_wait_list,
                                 pi_event *event, void **ret_map) {
   ensureTraceOpened();
-  auto [funcId, numOutputs, totalSize] = readHeader();
+  Record record = getNextRecord(GTrace, "", true);
 
-  dieIfUnexpected(funcId, PiApiKind::piEnqueueMemBufferMap);
+  dieIfUnexpected(record.functionId, PiApiKind::piEnqueueMemBufferMap);
 
-  skipArguments(totalSize);
+  auto memory = new char[record.outputs[0].data.size()];
 
-  size_t outSize;
-  GTrace.read(reinterpret_cast<char *>(&outSize), sizeof(size_t));
-
-  auto memory = new char[outSize];
-
-  GTrace.read(reinterpret_cast<char *>(memory), outSize);
+  std::memcpy(memory, record.outputs[0].data.data(),
+              record.outputs[0].data.size());
 
   *ret_map = memory;
+  *event = reinterpret_cast<pi_event>(new int{1});
 
-  return getResult();
+  return record.result;
 }
 
 pi_result piEnqueueMemBufferRead(pi_queue queue, pi_mem buffer,
@@ -432,21 +434,20 @@ pi_result piEnqueueMemBufferRead(pi_queue queue, pi_mem buffer,
                                  const pi_event *event_wait_list,
                                  pi_event *event) {
   ensureTraceOpened();
-  auto [funcId, numOutputs, totalSize] = readHeader();
+  Record record = getNextRecord(GTrace, "", true);
 
-  dieIfUnexpected(funcId, PiApiKind::piEnqueueMemBufferRead);
+  dieIfUnexpected(record.functionId, PiApiKind::piEnqueueMemBufferRead);
 
-  skipArguments(totalSize);
+  std::memcpy(ptr, record.outputs[0].data.data(),
+              record.outputs[0].data.size());
+  *event = reinterpret_cast<pi_event>(new int{1});
 
-  size_t outSize;
-  GTrace.read(reinterpret_cast<char *>(&outSize), sizeof(size_t));
-
-  GTrace.read(reinterpret_cast<char *>(ptr), outSize);
-
-  return getResult();
+  return record.result;
 }
 
-pi_result piTearDown(void *) { return PI_SUCCESS; }
+pi_result piTearDown(void *) {
+  return PI_SUCCESS;
+}
 
 pi_result piPluginInit(pi_plugin *PluginInit) {
 

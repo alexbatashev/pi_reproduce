@@ -9,6 +9,7 @@ class options {
 public:
   enum class mode { record, replay, print, info };
   enum class print_group_by { none, thread };
+
   options(int argc, char *argv[], char *env[]);
 
   mode command() const noexcept { return mMode; }
@@ -30,6 +31,10 @@ public:
 
   auto env() const noexcept { return mEnvVars; }
 
+  bool record_skip_mem_objects() const noexcept { return mRecordSkipMemObjs; }
+
+  bool no_fork() const noexcept { return mNoFork; }
+
 private:
   void parseRecordOptions(int argc, char *argv[]);
   void parseReplayOptions(int argc, char *argv[]);
@@ -44,4 +49,6 @@ private:
   bool mPrintPerformanceSummary = false;
   bool mVerbose = false;
   std::vector<std::string_view> mEnvVars;
+  bool mRecordSkipMemObjs = false;
+  bool mNoFork = false;
 };

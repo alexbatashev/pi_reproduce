@@ -4,6 +4,7 @@
 #include <fmt/color.h>
 #include <fmt/core.h>
 #include <iostream>
+#include <stdexcept>
 #include <unistd.h>
 #include <vector>
 
@@ -20,6 +21,7 @@ static void printInfo() {
              "args\n\n");
   fmt::print("\tOptions:\n");
   fmt::print("\t{:20} - {}\n", "--output, -o", "output directory, required.");
+  fmt::print("\t{:20} - {}\n", "--skip-mem-objects, -s", "skip capture of memory objects.");
 
   fmt::print(fmt::emphasis::bold, "\n\nprint\n");
   fmt::print("\tUsage: dpcpp_trace print [OPTIONS] path/to/trace/dir\n\n");
@@ -40,16 +42,21 @@ static void printInfo() {
 }
 
 int main(int argc, char *argv[], char *env[]) {
-  options opts{argc, argv, env};
+  try {
+    options opts{argc, argv, env};
 
-  if (opts.command() == options::mode::info) {
-    printInfo();
-  } else if (opts.command() == options::mode::record) {
-    record(opts);
-  } else if (opts.command() == options::mode::print) {
-    printTrace(opts);
-  } else if (opts.command() == options::mode::replay) {
-    replay(opts);
+    if (opts.command() == options::mode::info) {
+      printInfo();
+    } else if (opts.command() == options::mode::record) {
+      record(opts);
+    } else if (opts.command() == options::mode::print) {
+      printTrace(opts);
+    } else if (opts.command() == options::mode::replay) {
+      replay(opts);
+    }
+  } catch (std::runtime_error &err) {
+    std::cerr << "CLI error: " << err.what() << "\n";
+    return -1;
   }
   return 0;
 }

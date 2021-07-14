@@ -1,15 +1,15 @@
 #include "options.hpp"
 
 #include <iostream>
+#include <stdexcept>
 #include <string_view>
 #include <unistd.h>
 
-static void parseInfoOptions(int argc, const char *argv[]) {
+static void parseInfoOptions(int argc, char *argv[]) {
   (void)argv;
 
   if (argc > 2) {
-    std::cerr << "info does not accept arguments";
-    std::terminate();
+    throw std::runtime_error("info does not take any arguments");
   }
 }
 
@@ -20,18 +20,21 @@ void options::parseRecordOptions(int argc, char *argv[]) {
   while (i < argc) {
     std::string_view opt{argv[i]};
 
-    if (opt[0] != '-') {
+    if (opt[0] != '-' && mInput.empty()) {
       mInput = opt;
     } else if (opt == "--") {
-      hasExtraOpts = true;
-      i++;
-      break;
-    } else if (opt == "--output" || opt == "-o") {
+      hasExtraOpts = true; i++; break;
+    } else if ((opt == "--output" || opt == "-o") && mOutput.empty()) {
       if (i + 1 >= argc) {
-        std::cerr << "--output requires an argument\n";
-        std::terminate();
+        throw std::runtime_error("--output requires an argument\n");
       }
       mOutput = argv[++i];
+    } else if ((opt == "--skip-mem-objects" || opt == "-s") && !mRecordSkipMemObjs) {
+      mRecordSkipMemObjs = true;
+    } else if (opt == "--no-fork" && !mNoFork) {
+      mNoFork = true;
+    } else {
+      throw std::runtime_error(std::string("unrecognized option ") + std::string(argv[i]));
     }
 
     i++;
@@ -44,12 +47,10 @@ void options::parseRecordOptions(int argc, char *argv[]) {
   }
 
   if (mInput.empty()) {
-    std::cerr << "input is required\n";
-    std::terminate();
+    throw std::runtime_error("input is required");
   }
   if (mOutput.empty()) {
-    std::cerr << "output is required\n";
-    std::terminate();
+    throw std::runtime_error("output is required");
   }
 }
 
@@ -72,6 +73,8 @@ void options::parseReplayOptions(int argc, char *argv[]) {
         std::terminate();
       }
       mOutput = argv[++i];
+    } else if (opt == "--no-fork" && !mNoFork) {
+      mNoFork = true;
     }
 
     i++;
@@ -156,5 +159,6 @@ options::options(int argc, char *argv[], char *env[]) {
     parsePrintOptions(argc, argv);
   } else if (command == "info" || command == "--help" || command == "-h") {
     mMode = mode::info;
+    parseInfoOptions(argc, argv);
   }
 }

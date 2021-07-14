@@ -1,10 +1,13 @@
 #include "common.hpp"
+#include "constants.hpp"
 
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <iostream>
 #include <string>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 void replay(const options &opts) {
@@ -19,8 +22,7 @@ void replay(const options &opts) {
   }
   cArgs[i] = nullptr;
 
-  std::string outPath =
-      std::string("PI_REPRODUCE_TRACE_PATH=") + opts.output().c_str();
+  std::string outPath = std::string(kTracePathEnvVar) + opts.output().c_str();
 
   std::string ldLibraryPath = "LD_LIBRARY_PATH=";
   ldLibraryPath += (opts.location() / ".." / "lib").string() + ":";
@@ -47,9 +49,24 @@ void replay(const options &opts) {
   cEnv.push_back(outPath.c_str());
   cEnv.push_back(nullptr);
 
-  auto err = execve(opts.input().c_str(), const_cast<char *const *>(cArgs),
-                    const_cast<char *const *>(cEnv.data()));
-  if (err) {
-    std::cerr << "Unexpected error while running executable: " << errno << "\n";
+  const auto start = [&]() {
+    auto err = execve(opts.input().c_str(), const_cast<char *const *>(cArgs),
+                      const_cast<char *const *>(cEnv.data()));
+    if (err) {
+      std::cerr << "Unexpected error while running executable: " << errno
+                << "\n";
+    }
+  };
+
+  if (opts.no_fork()) {
+    start();
+  } else {
+    pid_t pid = fork();
+    int status;
+    if (pid == 0) {
+      start();
+    } else {
+      waitpid(pid, &status, 0);
+    }
   }
 }
