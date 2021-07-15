@@ -35,6 +35,8 @@ public:
 
   bool no_fork() const noexcept { return mNoFork; }
 
+  bool print_only() const noexcept { return mPrintOnly; }
+
 private:
   void parseRecordOptions(int argc, char *argv[]);
   void parseReplayOptions(int argc, char *argv[]);
@@ -51,4 +53,5 @@ private:
   std::vector<std::string_view> mEnvVars;
   bool mRecordSkipMemObjs = false;
   bool mNoFork = false;
+  bool mPrintOnly = false;
 };

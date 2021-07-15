@@ -1,5 +1,6 @@
 #include "record_handler.hpp"
 #include "write_utils.hpp"
+#include "constants.hpp"
 
 #include <atomic>
 #include <cstdint>
@@ -20,7 +21,7 @@ void handleSelectBinary(std::ostream &os, sycl::detail::XPTIPluginInfo,
     if (GBinariesCollected)
       return;
 
-    std::filesystem::path outDir{std::getenv("PI_REPRODUCE_TRACE_PATH")};
+    std::filesystem::path outDir{std::getenv(kTracePathEnvVar)};
     GBinariesCollected = true;
     for (pi_uint32 i = 0; i < numBinaries; i++) {
       std::string extension;

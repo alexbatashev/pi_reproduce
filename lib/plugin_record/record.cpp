@@ -46,8 +46,8 @@ XPTI_CALLBACK_API void xptiTraceInit(unsigned int major_version,
                                      unsigned int minor_version,
                                      const char *version_str,
                                      const char *stream_name) {
-  if (!std::getenv("PI_REPRODUCE_TRACE_PATH")) {
-    std::cerr << "PI_REPRODUCE_TRACE_PATH is not set\n";
+  if (!std::getenv(kTracePathEnvVar)) {
+    std::cerr << kTracePathEnvVar << " is not set\n";
     std::terminate();
   }
 
