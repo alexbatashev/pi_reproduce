@@ -123,7 +123,7 @@ static std::string getAPIName(uint32_t id) {
   sycl::detail::PiApiKind kind = static_cast<sycl::detail::PiApiKind>(id);
 
   switch (kind) {
-#define _PI_API(api, ...)                                                      \
+#define _PI_API(api)                                                           \
   case sycl::detail::PiApiKind::api:                                           \
     return #api;
 #include <CL/sycl/detail/pi.def>
@@ -158,7 +158,7 @@ void printTrace(const options &opts) {
 
   sycl::xpti_helpers::PiArgumentsHandler argHandler;
 
-#define _PI_API(api, ...)                                                      \
+#define _PI_API(api)                                                           \
   argHandler.set##_##api([](sycl::detail::XPTIPluginInfo,                      \
                             std::optional<pi_result>, auto... Args) {          \
     std::cout << "---> " << #api << "("                                        \
