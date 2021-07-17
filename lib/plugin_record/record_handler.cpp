@@ -13,50 +13,51 @@ static std::atomic_bool GBinariesCollected = false;
 static std::mutex GBinariesMutex;
 
 static void dumpBinaryDescriptor(pi_device_binary binary, pi_uint32 idx) {
-  std::filesystem::path outDir{std::getenv("PI_REPRODUCE_TRACE_PATH")};
+  std::filesystem::path outDir{std::getenv(kTracePathEnvVar)};
   auto path = outDir / (std::to_string(idx) + ".desc");
 
   std::ofstream os{path, std::ios::binary};
 
-  const auto writeString = [&os](const char *str) {
+  const auto writeInt = [&os](const auto num) {
+    os.write(reinterpret_cast<const char *>(&num), sizeof(num));
+  };
+
+  const auto writeString = [&os, &writeInt](const char *str) {
     size_t length = strlen(str) + 1;
-    os << length;
+    writeInt(length);
     os.write(str, length);
   };
 
-  os << binary->Version;
-  os << binary->Kind;
-  os << binary->Format;
+  writeInt(binary->Version);
+  writeInt(binary->Kind);
+  writeInt(binary->Format);
   writeString(binary->DeviceTargetSpec);
   writeString(binary->CompileOptions);
   writeString(binary->LinkOptions);
-  os << binary->LinkOptions;
   size_t numOffloadEntries =
       std::distance(binary->EntriesBegin, binary->EntriesEnd);
-  os << numOffloadEntries;
-  std::cout << "OE : " << numOffloadEntries;
+  writeInt(numOffloadEntries);
 
   for (auto it = binary->EntriesBegin; it != binary->EntriesEnd; ++it) {
-    os << (size_t)it->addr;
+    writeInt(reinterpret_cast<size_t>(it->addr));
     writeString(it->name);
-    os << it->name;
-    os << it->size;
+    writeInt(static_cast<size_t>(it->size));
   }
 
   size_t numPropSets =
       std::distance(binary->PropertySetsBegin, binary->PropertySetsEnd);
-  os << numPropSets;
+  writeInt(numPropSets);
   for (auto it = binary->PropertySetsBegin; it != binary->PropertySetsEnd;
        ++it) {
     writeString(it->Name);
     size_t numProperties =
         std::distance(it->PropertiesBegin, it->PropertiesEnd);
-    os << numProperties;
+    writeInt(numProperties);
     for (auto p = it->PropertiesBegin; p != it->PropertiesEnd; ++p) {
       writeString(p->Name);
-      os << (size_t)p->ValAddr;
-      os << p->Type;
-      os << p->ValSize;
+      writeInt(reinterpret_cast<size_t>(p->ValAddr));
+      writeInt(p->Type);
+      writeInt(static_cast<size_t>(p->ValSize));
     }
   }
   os.close();
