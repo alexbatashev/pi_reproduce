@@ -1,3 +1,5 @@
+#include "constants.hpp"
+
 #include "xpti_trace_framework.h"
 
 #include <filesystem>
@@ -47,7 +49,7 @@ XPTI_CALLBACK_API void xptiTraceInit(unsigned int major_version,
 }
 
 static void dumpGraph() {
-  std::filesystem::path outDir{std::getenv("PI_REPRODUCE_TRACE_PATH")};
+  std::filesystem::path outDir{std::getenv(kTracePathEnvVar)};
 
   std::ofstream traceFile{outDir / "graph.json"};
 
