@@ -7,9 +7,61 @@
 #include <cstring>
 #include <filesystem>
 #include <mutex>
+#include <string>
 
 static std::atomic_bool GBinariesCollected = false;
 static std::mutex GBinariesMutex;
+
+static void dumpBinaryDescriptor(pi_device_binary binary, pi_uint32 idx) {
+  std::filesystem::path outDir{std::getenv(kTracePathEnvVar)};
+  auto path = outDir / (std::to_string(idx) + ".desc");
+
+  std::ofstream os{path, std::ios::binary};
+
+  const auto writeInt = [&os](const auto num) {
+    os.write(reinterpret_cast<const char *>(&num), sizeof(num));
+  };
+
+  const auto writeString = [&os, &writeInt](const char *str) {
+    size_t length = strlen(str) + 1;
+    writeInt(length);
+    os.write(str, length);
+  };
+
+  writeInt(binary->Version);
+  writeInt(binary->Kind);
+  writeInt(binary->Format);
+  writeString(binary->DeviceTargetSpec);
+  writeString(binary->CompileOptions);
+  writeString(binary->LinkOptions);
+  size_t numOffloadEntries =
+      std::distance(binary->EntriesBegin, binary->EntriesEnd);
+  writeInt(numOffloadEntries);
+
+  for (auto it = binary->EntriesBegin; it != binary->EntriesEnd; ++it) {
+    writeInt(reinterpret_cast<size_t>(it->addr));
+    writeString(it->name);
+    writeInt(static_cast<size_t>(it->size));
+  }
+
+  size_t numPropSets =
+      std::distance(binary->PropertySetsBegin, binary->PropertySetsEnd);
+  writeInt(numPropSets);
+  for (auto it = binary->PropertySetsBegin; it != binary->PropertySetsEnd;
+       ++it) {
+    writeString(it->Name);
+    size_t numProperties =
+        std::distance(it->PropertiesBegin, it->PropertiesEnd);
+    writeInt(numProperties);
+    for (auto p = it->PropertiesBegin; p != it->PropertiesEnd; ++p) {
+      writeString(p->Name);
+      writeInt(reinterpret_cast<size_t>(p->ValAddr));
+      writeInt(p->Type);
+      writeInt(static_cast<size_t>(p->ValSize));
+    }
+  }
+  os.close();
+}
 
 void handleSelectBinary(std::ostream &os, sycl::detail::XPTIPluginInfo,
                         std::optional<pi_result>, pi_device device,
@@ -43,6 +95,7 @@ void handleSelectBinary(std::ostream &os, sycl::detail::XPTIPluginInfo,
       bos.write(reinterpret_cast<const char *>(binaries[i]->BinaryStart),
                 binarySize);
       bos.close();
+      dumpBinaryDescriptor(binaries[i], i);
     }
   }
 

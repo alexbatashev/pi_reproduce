@@ -146,6 +146,124 @@ printPerformanceSummary(std::map<uint32_t, PerformanceSummary> &perfMap) {
   }
 }
 
+void printImageDesc(std::filesystem::path path) {
+  std::ifstream is{path, std::ios::binary};
+
+  const auto readInt = [&is](auto &num) {
+    is.read(reinterpret_cast<char *>(&num),
+            sizeof(std::decay_t<decltype(num)>));
+  };
+
+  fmt::print("Image desc: {}\n", path.string());
+
+  uint16_t version;
+  readInt(version);
+  fmt::print("Version: {}\n", version);
+
+  uint8_t kind;
+  readInt(kind);
+  fmt::print("Kind: {}\n", kind);
+
+  uint8_t format;
+  readInt(format);
+  if (format == PI_DEVICE_BINARY_TYPE_SPIRV)
+    fmt::print("Format: SPIR-V\n");
+  else if (format == PI_DEVICE_BINARY_TYPE_NATIVE)
+    fmt::print("Format: Native\n");
+  else if (format == PI_DEVICE_BINARY_TYPE_LLVMIR_BITCODE)
+    fmt::print("Format: LLVM IR Bitcode\n");
+  else if (format == PI_DEVICE_BINARY_TYPE_NONE)
+    fmt::print("Format: None\n");
+
+  std::array<char, 8192> buf;
+  size_t length;
+
+  readInt(length);
+  is.read(buf.data(), length);
+
+  fmt::print("Device target: {}\n", std::string_view(buf.data(), length - 1));
+
+  readInt(length);
+  is.read(buf.data(), length);
+
+  fmt::print("Compile options: {}\n", std::string_view(buf.data(), length - 1));
+
+  readInt(length);
+  is.read(buf.data(), length);
+
+  fmt::print("Link options: {}\n", std::string_view(buf.data(), length - 1));
+
+  size_t numOffloadEntries;
+  readInt(numOffloadEntries);
+
+  fmt::print("Offload entries [{}]:\n", numOffloadEntries);
+  for (size_t i = 0; i < numOffloadEntries; i++) {
+    size_t addr;
+    readInt(addr);
+    fmt::print("{:>5}Address: {}\n", " ", addr);
+
+    readInt(length);
+    is.read(buf.data(), length);
+
+    fmt::print("{:>5}Name: {}\n", " ",
+               std::string_view(buf.data(), length - 1));
+
+    size_t size;
+    readInt(size);
+    fmt::print("{:>5}Size: {}\n\n", " ", size);
+  }
+
+  size_t numPropSets;
+  readInt(numPropSets);
+  fmt::print("Property sets [{}]:\n", numPropSets);
+  for (size_t i = 0; i < numPropSets; ++i) {
+    readInt(length);
+    is.read(buf.data(), length);
+
+    fmt::print("{:>5}Name: {}\n", " ",
+               std::string_view(buf.data(), length - 1));
+
+    size_t numProperties;
+    readInt(numProperties);
+    fmt::print("{:>5}Properties [{}]:\n", " ", numProperties);
+
+    for (size_t j = 0; j < numProperties; j++) {
+      readInt(length);
+      is.read(buf.data(), length);
+
+      fmt::print("{:>10}Name: {}\n", " ",
+                 std::string_view(buf.data(), length - 1));
+
+      size_t valAddr;
+      readInt(valAddr);
+
+      fmt::print("{:>10}Value address: {}\n", " ", valAddr);
+
+      int type;
+      readInt(type);
+      switch (static_cast<pi_property_type>(type)) {
+      case PI_PROPERTY_TYPE_UNKNOWN:
+        fmt::print("{:>10}Type: unknown\n", " ");
+        break;
+      case PI_PROPERTY_TYPE_UINT32:
+        fmt::print("{:>10}Type: uint32\n", " ");
+        break;
+      case PI_PROPERTY_TYPE_BYTE_ARRAY:
+        fmt::print("{:>10}Type: byte array\n", " ");
+        break;
+      case PI_PROPERTY_TYPE_STRING:
+        fmt::print("{:>10}Type: string\n", " ");
+        break;
+      }
+
+      size_t size;
+      readInt(size);
+      fmt::print("{:>10}Value size: {}\n", " ", size);
+    }
+  }
+  fmt::print("\n");
+}
+
 void printTrace(const options &opts) {
   if (!std::filesystem::exists(opts.input())) {
     std::cerr << "Input path does not exist: " << opts.input() << "\n";
@@ -171,6 +289,13 @@ void printTrace(const options &opts) {
 
   std::vector<Record> records;
 
+  fmt::print("Binary images:\n\n");
+  for (auto &de : std::filesystem::directory_iterator(opts.input())) {
+    if (de.path().extension().string() == ".desc") {
+      printImageDesc(de.path());
+    }
+  }
+  fmt::print("------------------------------------------\n");
   for (auto &de : std::filesystem::directory_iterator(opts.input())) {
     if (de.path().extension().string() == ".trace") {
       parseTraceFile(records, de.path());
