@@ -51,7 +51,7 @@ XPTI_CALLBACK_API void xptiTraceInit(unsigned int major_version,
     std::terminate();
   }
 
-  if (std::string_view(stream_name) == "sycl.pi.arg") {
+  if (std::string_view(stream_name) == kPIDebugStreamName) {
     GStreamID = xptiRegisterStream(stream_name);
     xptiRegisterCallback(
         GStreamID, (uint16_t)xpti::trace_point_type_t::function_with_args_begin,

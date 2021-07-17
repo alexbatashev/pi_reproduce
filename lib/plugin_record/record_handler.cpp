@@ -192,7 +192,7 @@ RecordHandler::RecordHandler(
     : mOS(std::move(os)), mStartTime(timestamp),
       mSkipMemObjects(skipMemObjects) {
 
-#define _PI_API(api, ...)                                                      \
+#define _PI_API(api)                                                           \
   mArgHandler.set##_##api(                                                     \
       [this](auto &&...Args) { writeSimple(*mOS, Args...); });
 #include <CL/sycl/detail/pi.def>
