@@ -93,12 +93,12 @@
 |piEnqueueMemImageFill | + | - | - |
 |piEnqueueMemBufferMap | + | + | - |
 |piEnqueueMemUnmap | + | + | - |
-|piextUSMHostAlloc | + | - | - |
-|piextUSMDeviceAlloc | + | - | - |
+|piextUSMHostAlloc | + | + | - |
+|piextUSMDeviceAlloc | + | + | - |
 |piextUSMSharedAlloc | + | - | - |
-|piextUSMFree | + | - | - |
+|piextUSMFree | + | + | - |
 |piextUSMEnqueueMemset | + | - | - |
-|piextUSMEnqueueMemcpy | + | - | - |
+|piextUSMEnqueueMemcpy | + | + | - |
 |piextUSMEnqueuePrefetch | + | - | - |
 |piextUSMEnqueueMemAdvise | + | - | - |
 |piextUSMGetMemAllocInfo | + | - | - |

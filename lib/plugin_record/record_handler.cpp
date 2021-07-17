@@ -238,6 +238,39 @@ void handleKernelGetGroupInfo(std::ostream &os, sycl::detail::XPTIPluginInfo,
     os.write(reinterpret_cast<const char *>(RetSize), outSize);
   }
 }
+
+void handleUSMEnqueueMemcpy(std::ostream &os, bool writeMemObj,
+                            sycl::detail::XPTIPluginInfo pluginInfo,
+                            std::optional<pi_result>, pi_queue queue,
+                            pi_bool blocking, void *dst_ptr,
+                            const void *src_ptr, size_t size,
+                            pi_uint32 num_events_in_waitlist,
+                            const pi_event *events_waitlist, pi_event *event) {
+  pi_context context;
+  pluginInfo.plugin.PiFunctionTable.piQueueGetInfo(
+      queue, PI_QUEUE_INFO_CONTEXT, sizeof(pi_context), &context, nullptr);
+  pi_usm_type allocType;
+  pluginInfo.plugin.PiFunctionTable.piextUSMGetMemAllocInfo(
+      context, dst_ptr, PI_MEM_ALLOC_TYPE, sizeof(allocType), &allocType,
+      nullptr);
+
+  // if type is unknown, assuming unregistered host pointer.
+  const bool shouldSaveMem =
+      (allocType == PI_MEM_TYPE_UNKNOWN || allocType == PI_MEM_TYPE_HOST) &&
+      writeMemObj;
+
+  size_t numOutputs = shouldSaveMem ? 1 : 0;
+
+  writeWithOutput(os, numOutputs, queue, blocking, dst_ptr, src_ptr, size,
+                  num_events_in_waitlist, events_waitlist, event);
+
+  if (shouldSaveMem) {
+    pluginInfo.plugin.PiFunctionTable.piEventsWait(1, event);
+    os.write(reinterpret_cast<const char *>(&size), sizeof(size_t));
+    os.write(reinterpret_cast<const char *>(dst_ptr), size);
+  }
+}
+
 RecordHandler::RecordHandler(
     std::unique_ptr<std::ostream> os,
     std::chrono::time_point<std::chrono::steady_clock> timestamp,
@@ -268,6 +301,7 @@ RecordHandler::RecordHandler(
   mArgHandler.set_piDevicesGet(wrap(handleDevicesGet));
   mArgHandler.set_piEnqueueMemBufferMap(wrapMem(handleEnqueueMemBufferMap));
   mArgHandler.set_piEnqueueMemBufferRead(wrapMem(handleEnqueueMemBufferRead));
+  mArgHandler.set_piextUSMEnqueueMemcpy(wrapMem(handleUSMEnqueueMemcpy));
   mArgHandler.set_piPlatformGetInfo(
       [this](sycl::detail::XPTIPluginInfo, std::optional<pi_result>,
              auto &&...Args) { writeWithInfo(*mOS, Args...); });

@@ -444,6 +444,61 @@ pi_result piEnqueueMemBufferRead(pi_queue queue, pi_mem buffer,
   return record.result;
 }
 
+pi_result piextUSMEnqueueMemcpy(pi_queue queue, pi_bool blocking, void *dst_ptr,
+                                const void *src_ptr, size_t size,
+                                pi_uint32 num_events_in_waitlist,
+                                const pi_event *events_waitlist,
+                                pi_event *event) {
+  ensureTraceOpened();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piextUSMEnqueueMemcpy);
+
+  if (record.outputs.size() > 0) {
+    std::memcpy(dst_ptr, record.outputs[0].data.data(), size);
+  }
+
+  *event = reinterpret_cast<pi_event>(new int{1});
+
+  return record.result;
+}
+
+pi_result piextUSMHostAlloc(void **result_ptr, pi_context context,
+                            pi_usm_mem_properties *properties, size_t size,
+                            pi_uint32 alignment) {
+  ensureTraceOpened();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piextUSMHostAlloc);
+  *result_ptr = static_cast<void *>(new char[size]);
+
+  return record.result;
+}
+
+pi_result piextUSMDeviceAlloc(void **result_ptr, pi_context context,
+                              pi_device device,
+                              pi_usm_mem_properties *properties, size_t size,
+                              pi_uint32 alignment) {
+  ensureTraceOpened();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piextUSMDeviceAlloc);
+  *result_ptr = static_cast<void *>(new char[size]);
+
+  return record.result;
+}
+
+pi_result piextUSMFree(pi_context context, void *ptr) {
+  ensureTraceOpened();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piextUSMFree);
+
+  delete[] static_cast<char *>(ptr);
+
+  return record.result;
+}
+
 pi_result piTearDown(void *) {
   return PI_SUCCESS;
 }
@@ -494,6 +549,11 @@ pi_result piPluginInit(pi_plugin *PluginInit) {
 
   _PI_CL(piEventsWait);
   _PI_CL(piEventRelease);
+
+  _PI_CL(piextUSMEnqueueMemcpy);
+  _PI_CL(piextUSMDeviceAlloc);
+  _PI_CL(piextUSMHostAlloc);
+  _PI_CL(piextUSMFree);
 
   _PI_CL(piTearDown);
 
