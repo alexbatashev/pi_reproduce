@@ -1,5 +1,6 @@
 #include "common.hpp"
 #include "constants.hpp"
+#include "fork.hpp"
 
 #include <cstdlib>
 #include <exception>
@@ -81,12 +82,7 @@ void replay(const options &opts) {
   if (opts.no_fork()) {
     start();
   } else {
-    pid_t pid = fork();
-    int status;
-    if (pid == 0) {
-      start();
-    } else {
-      waitpid(pid, &status, 0);
-    }
+    pid child = fork(start);
+    child.wait();
   }
 }
