@@ -19,7 +19,6 @@ Record getNextRecord(std::ifstream &is, std::string threadId,
 
   Record record{};
   record.functionId = header.functionId;
-  record.backend = header.backend;
   record.start = header.start;
   record.end = header.end;
 

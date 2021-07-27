@@ -63,7 +63,7 @@ static void dumpBinaryDescriptor(pi_device_binary binary, pi_uint32 idx) {
   os.close();
 }
 
-void handleSelectBinary(std::ostream &os, sycl::detail::XPTIPluginInfo,
+void handleSelectBinary(std::ostream &os, const pi_plugin &,
                         std::optional<pi_result>, pi_device device,
                         pi_device_binary *binaries, pi_uint32 numBinaries,
                         pi_uint32 *selectedBinary) {
@@ -106,7 +106,7 @@ void handleSelectBinary(std::ostream &os, sycl::detail::XPTIPluginInfo,
   os.write(reinterpret_cast<const char *>(selectedBinary), sizeof(outSize));
 }
 
-void handleProgramBuild(std::ostream &os, sycl::detail::XPTIPluginInfo,
+void handleProgramBuild(std::ostream &os, const pi_plugin &,
                         std::optional<pi_result>, pi_program prog,
                         pi_uint32 numDevices, const pi_device *devices,
                         const char *opts,
@@ -121,7 +121,7 @@ void handleProgramBuild(std::ostream &os, sycl::detail::XPTIPluginInfo,
   write(os, prog, numDevices, devices, opts, pfn_notify, user_data);
 }
 
-void handleKernelCreate(std::ostream &os, sycl::detail::XPTIPluginInfo,
+void handleKernelCreate(std::ostream &os, const pi_plugin &,
                         std::optional<pi_result>, pi_program prog,
                         const char *kernelName, pi_kernel *retKernel) {
   size_t totalSize =
@@ -133,7 +133,7 @@ void handleKernelCreate(std::ostream &os, sycl::detail::XPTIPluginInfo,
   write(os, prog, kernelName, retKernel);
 }
 
-void handlePlatformsGet(std::ostream &os, sycl::detail::XPTIPluginInfo,
+void handlePlatformsGet(std::ostream &os, const pi_plugin &,
                         std::optional<pi_result>, pi_uint32 numEntries,
                         pi_platform *platforms, pi_uint32 *numPlatforms) {
   size_t totalSize = sizeof(pi_uint32) + 2 * sizeof(void *);
@@ -151,7 +151,7 @@ void handlePlatformsGet(std::ostream &os, sycl::detail::XPTIPluginInfo,
   }
 }
 
-void handleDevicesGet(std::ostream &os, sycl::detail::XPTIPluginInfo,
+void handleDevicesGet(std::ostream &os, const pi_plugin &,
                       std::optional<pi_result>, pi_platform platform,
                       pi_device_type type, pi_uint32 numEntries,
                       pi_device *devs, pi_uint32 *numDevices) {
@@ -169,7 +169,7 @@ void handleDevicesGet(std::ostream &os, sycl::detail::XPTIPluginInfo,
 }
 
 void handleEnqueueMemBufferMap(std::ostream &os, bool writeMemObj,
-                               sycl::detail::XPTIPluginInfo Plugin,
+                               const pi_plugin &Plugin,
                                std::optional<pi_result>, pi_queue command_queue,
                                pi_mem buffer, pi_bool blocking_map,
                                pi_map_flags map_flags, size_t offset,
@@ -179,7 +179,7 @@ void handleEnqueueMemBufferMap(std::ostream &os, bool writeMemObj,
   // Wait for map to finish. There's no need to wait, if user asked to skip mem
   // objects. This will provide more accurate performance statistics.
   if (writeMemObj)
-    Plugin.plugin.PiFunctionTable.piEventsWait(1, event);
+    Plugin.PiFunctionTable.piEventsWait(1, event);
 
   size_t numOutputs = writeMemObj ? 1 : 0;
 
@@ -194,7 +194,7 @@ void handleEnqueueMemBufferMap(std::ostream &os, bool writeMemObj,
 }
 
 void handleEnqueueMemBufferRead(std::ostream &os, bool writeMemObj,
-                                sycl::detail::XPTIPluginInfo Plugin,
+                                const pi_plugin &Plugin,
                                 std::optional<pi_result>, pi_queue queue,
                                 pi_mem buffer, pi_bool blocking_read,
                                 size_t offset, size_t size, void *ptr,
@@ -205,7 +205,7 @@ void handleEnqueueMemBufferRead(std::ostream &os, bool writeMemObj,
   // Wait for read to finish. There's no need to wait, if user asked to skip mem
   // objects. This will provide more accurate performance statistics.
   if (writeMemObj)
-    Plugin.plugin.PiFunctionTable.piEventsWait(1, event);
+    Plugin.PiFunctionTable.piEventsWait(1, event);
 
   size_t numOutputs = writeMemObj ? 1 : 0;
 
@@ -218,7 +218,7 @@ void handleEnqueueMemBufferRead(std::ostream &os, bool writeMemObj,
   }
 }
 
-void handleKernelGetGroupInfo(std::ostream &os, sycl::detail::XPTIPluginInfo,
+void handleKernelGetGroupInfo(std::ostream &os, const pi_plugin &,
                               std::optional<pi_result>, pi_kernel kernel,
                               pi_device device, pi_kernel_group_info param_name,
                               size_t Size, void *Value, size_t *RetSize) {
@@ -240,17 +240,17 @@ void handleKernelGetGroupInfo(std::ostream &os, sycl::detail::XPTIPluginInfo,
 }
 
 void handleUSMEnqueueMemcpy(std::ostream &os, bool writeMemObj,
-                            sycl::detail::XPTIPluginInfo pluginInfo,
+                            const pi_plugin &pluginInfo,
                             std::optional<pi_result>, pi_queue queue,
                             pi_bool blocking, void *dst_ptr,
                             const void *src_ptr, size_t size,
                             pi_uint32 num_events_in_waitlist,
                             const pi_event *events_waitlist, pi_event *event) {
   pi_context context;
-  pluginInfo.plugin.PiFunctionTable.piQueueGetInfo(
+  pluginInfo.PiFunctionTable.piQueueGetInfo(
       queue, PI_QUEUE_INFO_CONTEXT, sizeof(pi_context), &context, nullptr);
   pi_usm_type allocType;
-  pluginInfo.plugin.PiFunctionTable.piextUSMGetMemAllocInfo(
+  pluginInfo.PiFunctionTable.piextUSMGetMemAllocInfo(
       context, dst_ptr, PI_MEM_ALLOC_TYPE, sizeof(allocType), &allocType,
       nullptr);
 
@@ -265,7 +265,7 @@ void handleUSMEnqueueMemcpy(std::ostream &os, bool writeMemObj,
                   num_events_in_waitlist, events_waitlist, event);
 
   if (shouldSaveMem) {
-    pluginInfo.plugin.PiFunctionTable.piEventsWait(1, event);
+    pluginInfo.PiFunctionTable.piEventsWait(1, event);
     os.write(reinterpret_cast<const char *>(&size), sizeof(size_t));
     os.write(reinterpret_cast<const char *>(dst_ptr), size);
   }
@@ -303,22 +303,25 @@ RecordHandler::RecordHandler(
   mArgHandler.set_piEnqueueMemBufferRead(wrapMem(handleEnqueueMemBufferRead));
   mArgHandler.set_piextUSMEnqueueMemcpy(wrapMem(handleUSMEnqueueMemcpy));
   mArgHandler.set_piPlatformGetInfo(
-      [this](sycl::detail::XPTIPluginInfo, std::optional<pi_result>,
-             auto &&...Args) { writeWithInfo(*mOS, Args...); });
+      [this](const pi_plugin &, std::optional<pi_result>, auto &&...Args) {
+        writeWithInfo(*mOS, Args...);
+      });
   mArgHandler.set_piDeviceGetInfo(
-      [this](sycl::detail::XPTIPluginInfo, std::optional<pi_result>,
-             auto &&...Args) { writeWithInfo(*mOS, Args...); });
+      [this](const pi_plugin &, std::optional<pi_result>, auto &&...Args) {
+        writeWithInfo(*mOS, Args...);
+      });
   mArgHandler.set_piContextGetInfo(
-      [this](sycl::detail::XPTIPluginInfo, std::optional<pi_result>,
-             auto &&...Args) { writeWithInfo(*mOS, Args...); });
+      [this](const pi_plugin &, std::optional<pi_result>, auto &&...Args) {
+        writeWithInfo(*mOS, Args...);
+      });
   mArgHandler.set_piKernelGetInfo(
-      [this](sycl::detail::XPTIPluginInfo, std::optional<pi_result>,
-             auto &&...Args) { writeWithInfo(*mOS, Args...); });
+      [this](const pi_plugin &, std::optional<pi_result>, auto &&...Args) {
+        writeWithInfo(*mOS, Args...);
+      });
   mArgHandler.set_piKernelGetGroupInfo(wrap(handleKernelGetGroupInfo));
 }
 
-void RecordHandler::handle(uint32_t funcId,
-                           const sycl::detail::XPTIPluginInfo &plugin,
+void RecordHandler::handle(uint32_t funcId, const pi_plugin &plugin,
                            std::optional<pi_result> result, void *data) {
   size_t numInputs = 0; // unused for now.
   mOS->write(reinterpret_cast<const char *>(&numInputs), sizeof(size_t));
@@ -330,9 +333,8 @@ void RecordHandler::handle(uint32_t funcId,
 
 void RecordHandler::flush() { mOS->flush(); }
 
-void RecordHandler::writeHeader(uint32_t funcId, uint8_t backend) {
+void RecordHandler::writeHeader(uint32_t funcId) {
   mOS->write(reinterpret_cast<const char *>(&funcId), sizeof(uint32_t));
-  mOS->write(reinterpret_cast<const char *>(&backend), sizeof(uint8_t));
 }
 
 void RecordHandler::timestamp() {

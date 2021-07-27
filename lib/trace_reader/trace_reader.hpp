@@ -9,7 +9,6 @@
 
 struct __attribute__((packed)) RecordHeader {
   uint32_t functionId;
-  uint8_t backend;
   uint64_t start;
   uint64_t end;
   size_t numInputs;
@@ -23,7 +22,6 @@ struct MemObject {
 
 struct Record {
   uint32_t functionId;
-  uint8_t backend;
   uint64_t start;
   uint64_t end;
   std::vector<char> argsData;
