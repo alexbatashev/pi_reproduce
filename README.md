@@ -1,6 +1,6 @@
 # DPC++ trace utility
 
-[![CI pipeline](https://github.com/alexbatashev/dpcpp_trace/actions/workflows/ci.yaml/badge.svg?event=schedule)](https://github.com/alexbatashev/dpcpp_trace/actions/workflows/ci.yaml)
+[![CI pipeline](https://github.com/alexbatashev/dpcpp_trace/actions/workflows/ci.yaml/badge.svg?event=schedule)](https://github.com/alexbatashev/dpcpp_trace/actions/workflows/ci.yaml?query=event%3Aschedule)
 
 **!!!WARNING!!! UNDER CONSTRUCTION**
 
