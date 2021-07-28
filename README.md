@@ -1,5 +1,7 @@
 # DPC++ trace utility
 
+[![CI pipeline](https://github.com/alexbatashev/dpcpp_trace/actions/workflows/ci.yaml/badge.svg?event=schedule)](https://github.com/alexbatashev/dpcpp_trace/actions/workflows/ci.yaml)
+
 **!!!WARNING!!! UNDER CONSTRUCTION**
 
 dpcpp_trace is a simple utility that facilitates debugging of both oneAPI DPC++
