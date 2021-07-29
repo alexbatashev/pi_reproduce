@@ -5,7 +5,6 @@
 
 #include "pi_arguments_handler.hpp"
 #include <CL/sycl/detail/pi.h>
-#include <CL/sycl/detail/xpti_plugin_info.hpp>
 #include <fmt/core.h>
 
 #include <array>
@@ -78,28 +77,11 @@ void parseTraceFile(std::vector<Record> &records, std::filesystem::path path) {
   }
 }
 
-static std::string getBackend(uint8_t ub) {
-  sycl::backend b = static_cast<sycl::backend>(ub);
-  switch (b) {
-  case sycl::backend::opencl:
-    return "OpenCL";
-  case sycl::backend::level_zero:
-    return "Level Zero";
-  case sycl::backend::cuda:
-    return "CUDA";
-  case sycl::backend::rocm:
-    return "ROCm";
-  default:
-    return "unknown";
-  }
-}
-
 static void printRecord(sycl::xpti_helpers::PiArgumentsHandler &argHandler,
                         Record &r, bool verbose) {
   if (verbose) {
     fmt::print("\n>~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n");
     fmt::print("{:<18} : {}\n", "Thread ID", r.threadId);
-    fmt::print("{:<18} : {}\n", "Backend", getBackend(r.backend));
     fmt::print("{:<18} : {}\n", "Call duration", r.end - r.start);
     fmt::print("{:<18} : {}\n\n", "Captured outputs", r.outputs.size());
   }
@@ -109,7 +91,7 @@ static void printRecord(sycl::xpti_helpers::PiArgumentsHandler &argHandler,
   } else if (r.functionId == static_cast<uint32_t>(PiApiKind::piKernelCreate)) {
     printKernelCreate(r.argsData.data());
   } else {
-    XPTIPluginInfo plugin;
+    pi_plugin plugin{};
     argHandler.handle(r.functionId, plugin, r.result, r.argsData.data());
   }
   std::cout << r.result << "\n";
@@ -277,13 +259,13 @@ void printTrace(const options &opts) {
   sycl::xpti_helpers::PiArgumentsHandler argHandler;
 
 #define _PI_API(api)                                                           \
-  argHandler.set##_##api([](sycl::detail::XPTIPluginInfo,                      \
-                            std::optional<pi_result>, auto... Args) {          \
-    std::cout << "---> " << #api << "("                                        \
-              << "\n";                                                         \
-    printArgs<sycl::detail::PiApiKind::api>(Args...);                          \
-    std::cout << ") ---> ";                                                    \
-  });
+  argHandler.set##_##api(                                                      \
+      [](const pi_plugin &, std::optional<pi_result>, auto... Args) {          \
+        std::cout << "---> " << #api << "("                                    \
+                  << "\n";                                                     \
+        printArgs<sycl::detail::PiApiKind::api>(Args...);                      \
+        std::cout << ") ---> ";                                                \
+      });
 #include <CL/sycl/detail/pi.def>
 #undef _PI_API
 

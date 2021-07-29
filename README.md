@@ -13,9 +13,11 @@ runtime and user applications that use it.
 - Collect performance statistics
 - Replay responses from plugins
 
-## Build instructions
+## Getting pre-built binaries
 
-**NOTE: Not all patches, required for pi_reproduce to work have been upstreamed**
+Pre-built binaries are published to for every nightly release [here](https://github.com/alexbatashev/dpcpp_trace/actions/workflows/ci.yaml?query=event%3Aschedule).
+
+## Build instructions
 
 1. Download and build DPC++: https://intel.github.io/llvm-docs/GetStartedGuide.html#build-dpc-toolchain
 
@@ -23,9 +25,9 @@ runtime and user applications that use it.
 
 ```bash
 git clone --recursive https://github.com/alexbatashev/dpcpp_trace.git
-cd pi_reproduce
+cd dpcpp_trace
 mkdir build && cd build
-cmake -DINTEL_LLVM_PATH=/path/to/intel/llvm/src/dir -GNinja ..
+cmake -DINTEL_LLVM_SOURCE_PATH=/path/to/intel/llvm/src/dir -DINTEL_LLVM_BINARY_PATH=/path/to/intel/llvm/build/dir -GNinja ..
 ninja
 ```
 
@@ -37,7 +39,7 @@ dpcpp_trace record -o /path/to/output/dir ./myapp -- --app-arg1 --app-arg2=foo
 ```
 
 ### Printing traces
-Simple mode (similar to `SYCL_PI_TRACE`):
+Simple mode (similar to `SYCL_PI_TRACE=-1`):
 
 ```bash
 dpcpp_trace print /path/to/output/dir

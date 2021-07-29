@@ -2,7 +2,6 @@
 #include "record_handler.hpp"
 #include "write_utils.hpp"
 
-#include <CL/sycl/detail/xpti_plugin_info.hpp>
 #include "pi_arguments_handler.hpp"
 #include "xpti_trace_framework.h"
 
@@ -90,10 +89,9 @@ XPTI_CALLBACK_API void tpCallback(uint16_t TraceType,
     if (GRecordHandler) {
       const auto *Data =
           static_cast<const xpti::function_with_args_t *>(UserData);
-      const auto *Plugin =
-          static_cast<sycl::detail::XPTIPluginInfo *>(Data->user_data);
+      const auto *Plugin = static_cast<pi_plugin *>(Data->user_data);
 
-      GRecordHandler->writeHeader(Data->function_id, Plugin->backend);
+      GRecordHandler->writeHeader(Data->function_id);
       GRecordHandler->timestamp();
     }
   } else if (Type == xpti::trace_point_type_t::function_with_args_end &&
@@ -103,8 +101,7 @@ XPTI_CALLBACK_API void tpCallback(uint16_t TraceType,
     const auto *Data =
         static_cast<const xpti::function_with_args_t *>(UserData);
 
-    const auto *Plugin =
-        static_cast<sycl::detail::XPTIPluginInfo *>(Data->user_data);
+    const auto *Plugin = static_cast<pi_plugin *>(Data->user_data);
     const pi_result Result = *static_cast<pi_result *>(Data->ret_data);
     GRecordHandler->handle(Data->function_id, *Plugin, Result, Data->args_data);
 
