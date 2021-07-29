@@ -14,6 +14,7 @@ public:
     int status;
     waitpid(mPid, &status, 0);
     // todo add error handling
+    mWaitedOn = true;
   }
 
   ~pid() {
