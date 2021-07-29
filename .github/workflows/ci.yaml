@@ -12,6 +12,8 @@ on:
 
 jobs:
   ubuntu:
+    # Temporarily disable this job until there's a robust way to get latest SYCL
+    if: false
     runs-on: ubuntu-latest
     container:
       image: alexbatashev/dpcpp_trace_build:latest
