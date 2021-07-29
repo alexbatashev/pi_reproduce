@@ -38,7 +38,7 @@
 |piMemBufferPartition | + | - | - |
 |piextMemGetNativeHandle | + | - | - |
 |piextMemCreateWithNativeHandle | + | - | - |
-|piProgramCreate | + | - | - |
+|piProgramCreate | + | + | - |
 |piclProgramCreateWithSource | + | - | - |
 |piProgramCreateWithBinary | + | + | - |
 |piProgramGetInfo | + | - | - |
