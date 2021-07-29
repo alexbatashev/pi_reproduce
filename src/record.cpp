@@ -1,5 +1,6 @@
 #include "common.hpp"
 #include "constants.hpp"
+#include "fork.hpp"
 
 #include <cstdlib>
 #include <dlfcn.h>
@@ -10,9 +11,7 @@
 #include <nlohmann/json.hpp>
 #include <string>
 #include <string_view>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <unistd.h>
+
 
 using json = nlohmann::json;
 
@@ -118,12 +117,7 @@ void record(const options &opts) {
   if (opts.no_fork()) {
     start();
   } else {
-    pid_t pid = fork();
-    int status;
-    if (pid == 0) {
-      start();
-    } else {
-      waitpid(pid, &status, 0);
-    }
+    pid child = fork(start);
+    child.wait();
   }
 }
