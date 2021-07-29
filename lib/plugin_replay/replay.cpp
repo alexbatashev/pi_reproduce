@@ -258,6 +258,16 @@ pi_result piProgramCreateWithBinary(
   return record.result;
 }
 
+pi_result piProgramCreate(pi_context context, const void *il, size_t length,
+                          pi_program *ret_program) {
+  ensureTraceOpened();
+  Record record = getNextRecord(GTrace, "", true);
+
+  dieIfUnexpected(record.functionId, PiApiKind::piProgramCreate);
+  *ret_program = reinterpret_cast<pi_program>(new int{1});
+  return record.result;
+}
+
 pi_result piProgramBuild(pi_program program, pi_uint32 num_devices,
                          const pi_device *device_list, const char *options,
                          void (*pfn_notify)(pi_program program,
@@ -532,6 +542,7 @@ pi_result piPluginInit(pi_plugin *PluginInit) {
 
   _PI_CL(piProgramBuild);
   _PI_CL(piProgramCreateWithBinary);
+  _PI_CL(piProgramCreate);
   _PI_CL(piProgramRelease);
 
   _PI_CL(piKernelCreate);
