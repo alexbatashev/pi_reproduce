@@ -3,11 +3,27 @@
 #include "fork.hpp"
 
 #include <cstdlib>
+#include <dlfcn.h>
 #include <exception>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <nlohmann/json.hpp>
 #include <string>
+#include <string_view>
+
+
+using json = nlohmann::json;
+
+static bool canLoadLibrary(std::string_view libName) {
+  void *handle = dlopen(libName.data(), RTLD_LAZY);
+  bool res = false;
+  if (handle) {
+    res = true;
+    dlclose(handle);
+  }
+  return res;
+}
 
 void record(const options &opts) {
   if (std::filesystem::exists(opts.output())) {
@@ -24,6 +40,17 @@ void record(const options &opts) {
     env << entry << "\n";
   }
   env.close();
+
+  {
+    std::ofstream replayConfigFile{opts.output() / kReplayConfigName};
+    json replayConfig;
+    replayConfig[kHasOpenCLPlugin] = canLoadLibrary(kOpenCLPluginName);
+    replayConfig[kHasLevelZeroPlugin] = canLoadLibrary(kLevelZeroPluginName);
+    replayConfig[kHasCUDAPlugin] = canLoadLibrary(kCUDAPluginName);
+    replayConfig[kHasROCmPlugin] = canLoadLibrary(kROCmPluginName);
+    replayConfigFile << replayConfig.dump(4);
+    replayConfigFile.close();
+  }
 
   const auto &args = opts.args();
 

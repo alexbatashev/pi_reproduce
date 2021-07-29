@@ -1,4 +1,4 @@
-add_executable(OptionsTests
+add_dpcpp_trace_executable(OptionsTests
   main.cpp
   info.cpp
   record.cpp
