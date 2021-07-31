@@ -8,40 +8,50 @@
 #include <unistd.h>
 #include <vector>
 
-static void printInfo() {
-  fmt::print("DPC++ trace utility\n");
-  fmt::print("Available commands\n");
-  fmt::print("{:>10} - {}\n", "info", "displays this guide");
-  fmt::print("{:>10} - {}\n", "record", "records DPC++ application trace");
-  fmt::print("{:>10} - {}\n", "print", "prints recorded traces");
-  fmt::print("{:>10} - {}\n\n\n", "replay", "replays recorded PI traces");
+inline constexpr auto infoText = R"___(
+DPC++ trace utility
 
-  fmt::print(fmt::emphasis::bold, "record\n");
-  fmt::print("\tUsage: dpcpp_trace record [OPTIONS] executable -- application "
-             "args\n\n");
-  fmt::print("\tOptions:\n");
-  fmt::print("\t{:20} - {}\n", "--output, -o", "output directory, required.");
-  fmt::print("\t{:20} - {}\n", "--skip-mem-objects, -s", "skip capture of memory objects.");
+Available commands:
 
-  fmt::print(fmt::emphasis::bold, "\n\nprint\n");
-  fmt::print("\tUsage: dpcpp_trace print [OPTIONS] path/to/trace/dir\n\n");
-  fmt::print("\tOptions:\n");
-  fmt::print(
-      "\t{:20} - {}\n", "--group <mode>",
-      "group PI call traces, available modes: none, thread; default: none");
-  fmt::print("\t{:20} - {}\n", "--verbose",
-             "print as much info about call as possible");
-  fmt::print("\t{:20} - {}\n", "--perf", "print performance summary");
+    info    displays this guide
+    record  records DPC++ application trace
+    print   prints recorded traces
+    replay  replays recorded PI traces
+    pack    packs executable and its dependencies into trace
 
-  fmt::print(fmt::emphasis::bold, "\n\nreplay\n");
-  fmt::print("\tUsage: dpcpp_trace replay [OPTIONS] executable [-- application "
-             "args]\n\n");
-  fmt::print("\tOptions:\n");
-  fmt::print("\t{:20} - {}\n", "--output, -o",
-             "path to trace directory, required");
-  fmt::print("\t{:20} - {}\n", "--print-only, -p",
-             "print the actual command, executed by this wrapper");
-}
+- record:
+    Usage: dpcpp_trace record [OPTIONS] executable [-- application args]
+
+    Options:
+      --output, -o  output directory, required.
+      --skip-mem-objects, -s
+                    skip record of memory objects.
+
+- print:
+    Usage: dpcpp_trace print [OPTIONS] path/to/trace/dir
+
+    Options:
+      --group <mode>
+                   group PI call traces, available modes: none, thread;
+                   default: none.
+      --verbose    print as much info as possible.
+      --perf       print performance summary per group.
+
+- replay:
+    Usages: dpcpp_trace replay [OPTIONS] path/to/trace/dir
+            dpcpp_trace replay [OPTIONS] -t /path/to/trace executable [-- args]
+
+    Options:
+      -t <path>    use trace from this path, but command line is specified
+                   separately.
+      --print-only, -p
+                   print command, that is going to be executed.
+
+- pack:
+    Usage: dpcpp_trace pack /path/to/trace
+)___";
+
+static void printInfo() { fmt::print(infoText); }
 
 int main(int argc, char *argv[], char *env[]) {
   try {
@@ -55,6 +65,8 @@ int main(int argc, char *argv[], char *env[]) {
       printTrace(opts);
     } else if (opts.command() == options::mode::replay) {
       replay(opts);
+    } else if (opts.command() == options::mode::pack) {
+      pack(opts);
     }
   } catch (std::runtime_error &err) {
     std::cerr << "CLI error: " << err.what() << "\n";

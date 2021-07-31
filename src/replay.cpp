@@ -17,27 +17,53 @@
 using json = nlohmann::json;
 
 void replay(const options &opts) {
-  const auto &args = opts.args();
+  std::filesystem::path tracePath;
+  bool hasCLI = true;
 
-  const char *cArgs[args.size() + 2];
-
-  int i = 0;
-  cArgs[i++] = opts.input().c_str();
-  for (auto &arg : args) {
-    cArgs[i++] = arg.c_str();
+  if (std::filesystem::is_directory(opts.input())) {
+    tracePath = opts.input();
+    hasCLI = false;
+  } else {
+    tracePath = opts.output();
   }
-  cArgs[i] = nullptr;
 
-  std::string outPath = std::string(kTracePathEnvVar) + "=" + opts.output().c_str();
+  std::ifstream replayConfigFile{tracePath / kReplayConfigName};
+  json replayConfig;
+  replayConfigFile >> replayConfig;
+
+  std::string command;
+  std::vector<std::string> strArgs;
+  std::vector<const char *> cArgs;
+
+  if (hasCLI) {
+    command = opts.input().string();
+    const auto &args = opts.args();
+    strArgs = opts.args();
+    cArgs.reserve(args.size() + 2);
+    cArgs.push_back(command.c_str());
+
+    for (auto &arg : args) {
+      cArgs.push_back(arg.c_str());
+    }
+  } else {
+    command = replayConfig[kReplayCommand].get<std::string>();
+    cArgs.push_back(command.c_str());
+    for (const auto &arg : replayConfig[kReplayArguments]) {
+      strArgs.push_back(arg.get<std::string>());
+      cArgs.push_back(strArgs.back().c_str());
+    }
+  }
+
+  cArgs.push_back(nullptr);
+
+  std::string outPath =
+      std::string(kTracePathEnvVar) + "=" + tracePath.string();
 
   bool hasOpenCL = false;
   bool hasLevelZero = false;
   bool hasCUDA = false;
   bool hasROCm = false;
 
-  std::ifstream replayConfigFile{opts.output() / kReplayConfigName};
-  json replayConfig;
-  replayConfigFile >> replayConfig;
   hasOpenCL = replayConfig[kHasOpenCLPlugin].get<bool>();
   hasLevelZero = replayConfig[kHasLevelZeroPlugin].get<bool>();
   hasCUDA = replayConfig[kHasCUDAPlugin].get<bool>();
@@ -68,8 +94,8 @@ void replay(const options &opts) {
       fmt::print("SYCL_OVERRIDE_PI_CUDA=libplugin_replay.so \\\n");
     if (hasROCm)
       fmt::print("SYCL_OVERRIDE_PI_ROCM=libplugin_replay.so \\\n");
-    fmt::print("{}", opts.input().string());
-    for (auto &arg : opts.args()) {
+    fmt::print("{}", command);
+    for (auto &arg : strArgs) {
       fmt::print(" {} ", arg);
     }
     fmt::print("\n");
@@ -95,8 +121,8 @@ void replay(const options &opts) {
   cEnv.push_back(outPath.c_str());
   cEnv.push_back(nullptr);
 
-  const auto start = [&]() {
-    auto err = execve(opts.input().c_str(), const_cast<char *const *>(cArgs),
+  const auto start = [cArgs, cEnv, command]() {
+    auto err = execve(command.c_str(), const_cast<char *const *>(cArgs.data()),
                       const_cast<char *const *>(cEnv.data()));
     if (err) {
       std::cerr << "Unexpected error while running executable: " << errno

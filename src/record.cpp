@@ -1,6 +1,7 @@
 #include "common.hpp"
 #include "constants.hpp"
 #include "fork.hpp"
+#include "trace.hpp"
 
 #include <cstdlib>
 #include <dlfcn.h>
@@ -11,7 +12,6 @@
 #include <nlohmann/json.hpp>
 #include <string>
 #include <string_view>
-
 
 using json = nlohmann::json;
 
@@ -41,6 +41,8 @@ void record(const options &opts) {
   }
   env.close();
 
+  const auto &args = opts.args();
+
   {
     std::ofstream replayConfigFile{opts.output() / kReplayConfigName};
     json replayConfig;
@@ -48,18 +50,22 @@ void record(const options &opts) {
     replayConfig[kHasLevelZeroPlugin] = canLoadLibrary(kLevelZeroPluginName);
     replayConfig[kHasCUDAPlugin] = canLoadLibrary(kCUDAPluginName);
     replayConfig[kHasROCmPlugin] = canLoadLibrary(kROCmPluginName);
+    if (opts.record_skip_mem_objects())
+      replayConfig[kRecordMode] = kRecordModeTraceOnly;
+    else
+      replayConfig[kRecordMode] = kRecordModeDefault;
+
+    replayConfig[kReplayCommand] = opts.input().string();
+
+    replayConfig[kReplayArguments] = json::array();
+    for (const auto &arg : args) {
+      replayConfig[kReplayArguments].push_back(arg);
+    }
+
     replayConfigFile << replayConfig.dump(4);
     replayConfigFile.close();
   }
 
-  const auto &args = opts.args();
-
-  std::ofstream command{opts.output() / "command.txt"};
-  command << opts.input();
-  for (const auto &arg : args) {
-    command << " " << arg;
-  }
-  command.close();
 
   const char *cArgs[args.size() + 2];
 
@@ -106,6 +112,7 @@ void record(const options &opts) {
   cEnv.push_back(nullptr);
 
   const auto start = [&]() {
+    traceMe();
     auto err = execve(opts.input().c_str(), const_cast<char *const *>(cArgs),
                       const_cast<char *const *>(cEnv.data()));
     if (err) {
@@ -118,6 +125,19 @@ void record(const options &opts) {
     start();
   } else {
     pid child = fork(start);
-    child.wait();
+    Tracer tracer(child);
+
+    json files;
+
+    tracer.onFileOpen([&files](const std::string &fileName) {
+      std::cout << fileName << "\n";
+      files.push_back(fileName);
+    });
+
+    tracer.run();
+
+    std::ofstream filesOut{opts.output() / kFilesConfigName};
+    filesOut << files.dump(4);
+    filesOut.close();
   }
 }

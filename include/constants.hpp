@@ -4,8 +4,19 @@ inline constexpr auto kSkipMemObjsEnvVar = "DPCPP_TRACE_SKIP_MEM_OBJECTS";
 inline constexpr auto kTracePathEnvVar = "DPCPP_TRACE_DATA_PATH";
 inline constexpr auto kPIDebugStreamName = "sycl.pi.debug";
 
+inline constexpr auto kFilesConfigName = "files_config.json";
+
 // Replay config constants
 inline constexpr auto kReplayConfigName = "replay_config.json";
+inline constexpr auto kReplayFileMapConfigName = "replay_file_map.json";
+
+inline constexpr auto kReplayCommand = "command";
+inline constexpr auto kReplayArguments = "arguments";
+
+inline constexpr auto kRecordMode = "recordMode";
+inline constexpr auto kRecordModeTraceOnly = "traceOnly";
+inline constexpr auto kRecordModeDefault = "default";
+inline constexpr auto kRecordModeFull = "full";
 
 inline constexpr auto kHasOpenCLPlugin = "hasOpenCLPlugin";
 inline constexpr auto kHasLevelZeroPlugin = "hasLevelZeroPlugin";

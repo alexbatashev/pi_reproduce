@@ -7,7 +7,7 @@
 
 class options {
 public:
-  enum class mode { record, replay, print, info };
+  enum class mode { record, replay, print, info, pack };
   enum class print_group_by { none, thread };
 
   options(int argc, char *argv[], char *env[]);
@@ -41,6 +41,7 @@ private:
   void parseRecordOptions(int argc, char *argv[]);
   void parseReplayOptions(int argc, char *argv[]);
   void parsePrintOptions(int argc, char *argv[]);
+  void parsePackOptions(int argc, char *argv[]);
 
   std::filesystem::path mExecutablePath;
   std::filesystem::path mInput;
