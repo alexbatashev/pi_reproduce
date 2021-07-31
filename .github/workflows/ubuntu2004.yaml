@@ -23,5 +23,5 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository }}:${{ github.sha }}
             ghcr.io/${{ github.repository }}:latest
-          context: docker/
-          file: Dockerfile.ubuntu2004
+          context: ${{ github.workspace }}/docker/
+          file: ${{ github.workspace }}/docker/Dockerfile.ubuntu2004
