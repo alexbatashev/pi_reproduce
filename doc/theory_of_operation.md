@@ -11,8 +11,9 @@ variables with the help of `execve` call:
 - `XPTI_SUBSCRIBERS=libplugin_record.so` to specify the subscriber library,
   which does most of the work.
 
-The subscriber library listens to `sycl.pi.args` stream, and records all
+The subscriber library listens to `sycl.pi.debug` stream, and records all
 arguments into a binary file, which format is described below.
+
 To learn more about XPTI, please, refer to
 [xpti](https://github.com/intel/llvm/blob/sycl/xpti/doc/SYCL_Tracing_Implementation.md)
 and [xptifw](https://github.com/intel/llvm/blob/sycl/xptifw/doc/XPTI_Framework.md)
