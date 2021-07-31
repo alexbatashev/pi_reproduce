@@ -1,0 +1,15 @@
+FROM ubuntu:20.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt update && apt install -yqq build-essential cmake ninja-build python3 git
+
+WORKDIR /src
+
+ARG LLVM_TAG=sycl
+
+RUN git clone --depth 1 --branch $LLVM_TAG https://github.com/intel/llvm.git
+RUN cd llvm && mkdir build && cd build && \
+      python3 ../buildbot/configure.py --no-werror && ninja sycl-toolchain
+
+ENTRYPOINT [ /bin/bash ]
