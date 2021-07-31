@@ -1,5 +1,6 @@
 #include "options.hpp"
 
+#include <cstdlib>
 #include <iostream>
 #include <stdexcept>
 #include <string_view>
@@ -67,9 +68,13 @@ void options::parseReplayOptions(int argc, char *argv[]) {
       hasExtraOpts = true;
       i++;
       break;
-    } else if (opt == "--output" || opt == "-o") {
+    } else if (opt == "--output" || opt == "-o" || opt == "-t") {
+      if (opt == "--output" || opt == "-t") {
+        std::clog << "--output and -o will be deprecated for replay, use -t "
+                     "instead\n";
+      }
       if (i + 1 >= argc) {
-        std::cerr << "--output requires an argument\n";
+        std::cerr << opt << " requires an argument\n";
         std::terminate();
       }
       mOutput = argv[++i];
@@ -90,10 +95,6 @@ void options::parseReplayOptions(int argc, char *argv[]) {
 
   if (mInput.empty()) {
     std::cerr << "input is required\n";
-    std::terminate();
-  }
-  if (mOutput.empty()) {
-    std::cerr << "output is required\n";
     std::terminate();
   }
 }
@@ -133,6 +134,15 @@ void options::parsePrintOptions(int argc, char *argv[]) {
   }
 }
 
+void options::parsePackOptions(int argc, char *argv[]) {
+  if (argc != 3) {
+    std::cerr << "pack accepts only one option\n";
+    exit(EXIT_FAILURE);
+  }
+
+  mInput = argv[2];
+}
+
 options::options(int argc, char *argv[], char *env[]) {
   if (argc < 2) {
     std::cerr << "Use dpcpp_trace info to see available options";
@@ -162,5 +172,8 @@ options::options(int argc, char *argv[], char *env[]) {
   } else if (command == "info" || command == "--help" || command == "-h") {
     mMode = mode::info;
     parseInfoOptions(argc, argv);
+  } else if (command == "pack") {
+    mMode = mode::pack;
+    parsePackOptions(argc, argv);
   }
 }

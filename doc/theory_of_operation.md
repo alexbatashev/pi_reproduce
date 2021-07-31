@@ -11,7 +11,7 @@ variables with the help of `execve` call:
 - `XPTI_SUBSCRIBERS=libplugin_record.so` to specify the subscriber library,
   which does most of the work.
 
-The subscriber library listens to `sycl.pi.args` stream, and records all
+The subscriber library listens to `sycl.pi.debug` stream, and records all
 arguments into a binary file, which format is described below.
 
 To learn more about XPTI, please, refer to
@@ -60,8 +60,8 @@ distinguish between thread, the tool injects a library, that intercepts
 thread is always named `main`. On thread creation, newly thread is assigned name
 in format `<current_thread_name>_n`, where `n` is the index number of the
 thread, started by current thread. For each thread a file with thread name is
-created. When printing, `prp` tool can either show traces per thread, or sort
-records by API call time.
+created. When printing, `dpcpp_trace` tool can either show traces per thread,
+or sort records by API call time.
 
 ### Device images
 
@@ -92,4 +92,17 @@ the same environment and command line arguments.
 
 ### Emulating DPC++ runtime
 TBD
+
+## Packed reproducers
+
+### Recording (Linux)
+On Linux `dpcpp_trace` uses `ptrace` function to intercept `openat` system call.
+Each opened file is recorded into `files_config.json` file.
+
+### Packing
+When trace is recorded, a separate `dpcpp_trace pack` run can be performed to
+copy application executable and its dependencies into trace directory. A special
+`replay_file_map.json` file is composed to provide mapping between original
+files and their packed versions. On Linux, paths, that start with `/dev`,
+`/sys`, or `/proc` are skipped.
 
