@@ -4,6 +4,7 @@ on:
   schedule:
     - cron: "0 0 1,15 * *"
   workflow_dispatch:
+  pull_request:
 
 jobs:
   build:
@@ -23,5 +24,5 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository }}:${{ github.sha }}
             ghcr.io/${{ github.repository }}:latest
-          context: docker/
-          file: Dockerfile.ubuntu2004
+          context: ${{ github.workspace }}/docker/
+          file: ${{ github.workspace }}/docker/Dockerfile.ubuntu2004
