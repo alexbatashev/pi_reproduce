@@ -24,6 +24,7 @@ jobs:
           submodules: true
       - name: Install dependencies
         run: |
+          echo 'APT::Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries
           apt update && apt install -yqq wget python3-pip ocl-icd-opencl-dev
           wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB -O - | apt-key add -
           echo "deb https://apt.repos.intel.com/oneapi all main" | tee /etc/apt/sources.list.d/oneAPI.list
