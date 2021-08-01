@@ -24,7 +24,7 @@ jobs:
           submodules: true
       - name: Build & test
         run: |
-          apt update && apt install -yqq ocl-icd-dev
+          apt update && apt install -yqq ocl-icd-dev opencl-headers ocl-icd
           mkdir build
           mkdir install
           cd build
