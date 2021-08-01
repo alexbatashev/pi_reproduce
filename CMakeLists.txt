@@ -40,4 +40,5 @@ add_subdirectory(src)
 add_subdirectory(lib)
 
 enable_testing()
+add_subdirectory(tests)
 add_subdirectory(unittests)

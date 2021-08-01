@@ -33,6 +33,8 @@ public:
 
   bool record_skip_mem_objects() const noexcept { return mRecordSkipMemObjs; }
 
+  bool record_override_trace() const noexcept { return mRecordOverrideTrace; }
+
   bool no_fork() const noexcept { return mNoFork; }
 
   bool print_only() const noexcept { return mPrintOnly; }
@@ -54,6 +56,7 @@ private:
   bool mVerbose = false;
   std::vector<std::string_view> mEnvVars;
   bool mRecordSkipMemObjs = false;
+  bool mRecordOverrideTrace = false;
   bool mNoFork = false;
   bool mPrintOnly = false;
   bool mDebugServerOnly = false;

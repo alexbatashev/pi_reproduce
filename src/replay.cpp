@@ -71,12 +71,6 @@ void replay(const options &opts) {
 
   std::string ldLibraryPath = "LD_LIBRARY_PATH=";
   ldLibraryPath += (opts.location() / ".." / "lib").string() + ":";
-  ldLibraryPath +=
-      (opts.location() / ".." / "lib" / "plugin_replay").string() + ":";
-  ldLibraryPath +=
-      (opts.location() / ".." / "lib" / "plugin_record").string() + ":";
-  ldLibraryPath +=
-      (opts.location() / ".." / "lib" / "system_intercept").string() + ":";
   std::string fullLDPath = ldLibraryPath;
   if (std::getenv("LD_LIBRARY_PATH")) {
     fullLDPath += std::string(std::getenv("LD_LIBRARY_PATH"));

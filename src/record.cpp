@@ -27,8 +27,14 @@ static bool canLoadLibrary(std::string_view libName) {
 
 void record(const options &opts) {
   if (std::filesystem::exists(opts.output())) {
-    std::cerr << "Output path " << opts.output() << " already exists\n";
-    std::terminate();
+    if (opts.record_override_trace()) {
+      std::clog << "WARNING: output path exists and will be removed: "
+                << opts.output() << "\n";
+      std::filesystem::remove_all(opts.output());
+    } else {
+      std::cerr << "Output path " << opts.output() << " already exists\n";
+      std::terminate();
+    }
   }
   if (!std::filesystem::create_directory(opts.output())) {
     std::cerr << "Failed to create directory " << opts.output() << "\n";
@@ -80,14 +86,6 @@ void record(const options &opts) {
 
   std::string ldLibraryPath = "LD_LIBRARY_PATH=";
   ldLibraryPath += (opts.location() / ".." / "lib").string() + ":";
-  ldLibraryPath +=
-      (opts.location() / ".." / "lib" / "plugin_replay").string() + ":";
-  ldLibraryPath +=
-      (opts.location() / ".." / "lib" / "plugin_record").string() + ":";
-  ldLibraryPath +=
-      (opts.location() / ".." / "lib" / "system_intercept").string() + ":";
-  ldLibraryPath +=
-      (opts.location() / ".." / "lib" / "graph_dump").string() + ":";
   ldLibraryPath += std::string(std::getenv("LD_LIBRARY_PATH"));
 
   std::vector<const char *> cEnv;
@@ -130,7 +128,6 @@ void record(const options &opts) {
     json files;
 
     tracer.onFileOpen([&files](const std::string &fileName) {
-      std::cout << fileName << "\n";
       files.push_back(fileName);
     });
 

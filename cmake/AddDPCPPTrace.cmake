@@ -14,6 +14,10 @@ macro(set_dpcpp_trace_common_options target_name)
 
   target_link_libraries(${target_name} PRIVATE xptifw)
   target_compile_definitions(${target_name} PRIVATE -DCL_TARGET_OPENCL_VERSION=300)
+
+  set_target_properties(${target_name} PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin
+    )
 endmacro()
 
 function(add_dpcpp_trace_library target_name kind)
@@ -22,6 +26,10 @@ function(add_dpcpp_trace_library target_name kind)
   set_dpcpp_trace_common_options(${target_name})
 
   target_compile_options(${target_name} PRIVATE -fPIC)
+
+  set_target_properties(${target_name} PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib
+    )
 endfunction()
 
 function(add_dpcpp_trace_executable target_name)
