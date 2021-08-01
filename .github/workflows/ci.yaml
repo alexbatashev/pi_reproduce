@@ -13,10 +13,9 @@ on:
 jobs:
   ubuntu:
     # Temporarily disable this job until there's a robust way to get latest SYCL
-    if: false
     runs-on: ubuntu-latest
     container:
-      image: alexbatashev/dpcpp_trace_build:latest
+      image: ghcr.io/alexbatashev/dpcpp_trace:f22180070e3e172c0b9739dca88b568aa9588c28
       volumes:
         - ${{ github.workspace }}:${{ github.workspace }}
     steps:
@@ -30,7 +29,7 @@ jobs:
           mkdir build
           mkdir install
           cd build
-          cmake -DINTEL_LLVM_PATH=/src/llvm -GNinja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install ..
+          cmake -DINTEL_LLVM_SOURCE_PATH=/src/llvm -DINTEL_LLVM_BINARY_PATH=/src/llvm/build -GNinja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install ..
           ninja
           ctest
       - name: Install
