@@ -67,6 +67,8 @@ int main(int argc, char *argv[], char *env[]) {
       replay(opts);
     } else if (opts.command() == options::mode::pack) {
       pack(opts);
+    } else if (opts.command() == options::mode::debug) {
+      debug(opts);
     }
   } catch (std::runtime_error &err) {
     std::cerr << "CLI error: " << err.what() << "\n";
