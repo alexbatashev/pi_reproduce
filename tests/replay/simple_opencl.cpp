@@ -1,7 +1,7 @@
 // REQUIRES: opencl
 // RUN: %clangxx -fsycl %s -o %t.exe
 // RUN: env SYCL_DEVICE_FILTER="opencl" %dpcpp_trace record --override -o %t_record %t.exe
-// RUN: env SYCL_DEVICE_FILTER="opencl" %dpcpp_trace replay %t_record | FileCheck %s
+// RUN: env SYCL_DEVICE_FILTER="opencl" %dpcpp_trace replay %t_record | %FileCheck %s
 
 #include <sycl/sycl.hpp>
 

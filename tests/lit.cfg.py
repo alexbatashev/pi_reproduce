@@ -11,6 +11,7 @@ config.test_exec_root = config.dpcpp_trace_tests_obj_dir
 
 llvm_config.with_system_environment('LD_LIBRARY_PATH')
 llvm_config.with_environment('LD_LIBRARY_PATH', config.dpcpp_trace_lib_dir, append_path=True)
+llvm_config.with_environment('LD_LIBRARY_PATH', os.path.join(config.intel_llvm_bin_root, "lib"), append_path=True)
 
 config.available_features.add('linux')
 
@@ -28,5 +29,6 @@ if "rocm:" in str(devices_res.stdout):
 config.substitutions.append(('%dpcpp_trace', config.dpcpp_trace_bin_dir + "/dpcpp_trace"))
 config.substitutions.append(('%clangxx', config.intel_llvm_bin_root + "/bin/clang++"))
 config.substitutions.append(('%sycl_ls', config.intel_llvm_bin_root + "/bin/sycl-ls"))
+config.substitutions.append(('%FileCheck', config.filecheck_path))
 
 config.suffixes = ['.cpp']

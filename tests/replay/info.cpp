@@ -1,6 +1,6 @@
 // RUN: %clangxx -fsycl %s -o %t.exe
 // RUN: %dpcpp_trace record --override -o %t_trace %t.exe
-// RUN: %dpcpp_trace replay %t_trace | FileCheck %s
+// RUN: %dpcpp_trace replay %t_trace | %FileCheck %s
 
 #include <sycl/sycl.hpp>
 
