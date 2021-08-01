@@ -12,3 +12,4 @@ include(CTest)
 include(Catch)
 
 add_subdirectory(options)
+add_subdirectory(misc)

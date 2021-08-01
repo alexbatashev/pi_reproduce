@@ -2,6 +2,7 @@
 #include "constants.hpp"
 #include "fork.hpp"
 #include "trace.hpp"
+#include "utils.hpp"
 
 #include <cstdlib>
 #include <dlfcn.h>
@@ -47,6 +48,14 @@ void record(const options &opts) {
   }
   env.close();
 
+  auto path = std::string(std::getenv("PATH"));
+
+  std::string executable = opts.input().string();
+
+  if (!std::filesystem::exists(opts.input())) {
+    executable = which(path, executable);
+  }
+
   const auto &args = opts.args();
 
   {
@@ -62,6 +71,7 @@ void record(const options &opts) {
       replayConfig[kRecordMode] = kRecordModeDefault;
 
     replayConfig[kReplayCommand] = opts.input().string();
+    replayConfig[kReplayExecutable] = executable;
 
     replayConfig[kReplayArguments] = json::array();
     for (const auto &arg : args) {
@@ -72,15 +82,14 @@ void record(const options &opts) {
     replayConfigFile.close();
   }
 
+  std::vector<const char *> cArgs;
+  cArgs.reserve(args.size() + 2);
 
-  const char *cArgs[args.size() + 2];
-
-  int i = 0;
-  cArgs[i++] = opts.input().c_str();
+  cArgs.push_back(opts.input().c_str());
   for (auto &arg : args) {
-    cArgs[i++] = arg.c_str();
+    cArgs.push_back(arg.c_str());
   }
-  cArgs[i] = nullptr;
+  cArgs.push_back(nullptr);
 
   std::string outPath = std::string(kTracePathEnvVar) + "=" + opts.output().c_str();
 
@@ -111,8 +120,9 @@ void record(const options &opts) {
 
   const auto start = [&]() {
     traceMe();
-    auto err = execve(opts.input().c_str(), const_cast<char *const *>(cArgs),
-                      const_cast<char *const *>(cEnv.data()));
+    auto err =
+        execve(executable.c_str(), const_cast<char *const *>(cArgs.data()),
+               const_cast<char *const *>(cEnv.data()));
     if (err) {
       std::cerr << "Unexpected error while running executable: " << errno
                 << "\n";
@@ -127,9 +137,11 @@ void record(const options &opts) {
 
     json files;
 
-    tracer.onFileOpen([&files](const std::string &fileName) {
-      files.push_back(fileName);
-    });
+    tracer.onFileOpen(
+        [&files](const std::string &fileName, const OpenHandler &h) {
+          files.push_back(fileName);
+          h.execute();
+        });
 
     tracer.run();
 

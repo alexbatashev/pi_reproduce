@@ -1,6 +1,8 @@
 #include "common.hpp"
 #include "constants.hpp"
 #include "fork.hpp"
+#include "trace.hpp"
+#include "utils.hpp"
 
 #include <cstdlib>
 #include <exception>
@@ -31,11 +33,29 @@ void replay(const options &opts) {
   json replayConfig;
   replayConfigFile >> replayConfig;
 
+  bool packedReproducer = false;
+  if (replayConfig[kRecordMode].get<std::string>() == kRecordModeFull) {
+    packedReproducer = true;
+  }
+
+  if (hasCLI && packedReproducer) {
+    throw std::runtime_error(
+        "Command line arguments are not supported for packed reproducers");
+  }
+
   std::string command;
+  std::string executable;
   std::vector<std::string> strArgs;
   std::vector<const char *> cArgs;
 
+  std::string_view path{getenv("PATH")};
+
   if (hasCLI) {
+    if (!std::filesystem::exists(opts.input())) {
+      executable = which(path, opts.input().string());
+    } else {
+      executable = opts.input().string();
+    }
     command = opts.input().string();
     const auto &args = opts.args();
     strArgs = opts.args();
@@ -46,6 +66,11 @@ void replay(const options &opts) {
       cArgs.push_back(arg.c_str());
     }
   } else {
+    if (packedReproducer) {
+      executable = opts.input() / kPackedDataPath / "0";
+    } else {
+      executable = replayConfig[kReplayExecutable].get<std::string>();
+    }
     command = replayConfig[kReplayCommand].get<std::string>();
     cArgs.push_back(command.c_str());
     for (const auto &arg : replayConfig[kReplayArguments]) {
@@ -115,19 +140,39 @@ void replay(const options &opts) {
   cEnv.push_back(outPath.c_str());
   cEnv.push_back(nullptr);
 
-  const auto start = [cArgs, cEnv, command]() {
-    auto err = execve(command.c_str(), const_cast<char *const *>(cArgs.data()),
-                      const_cast<char *const *>(cEnv.data()));
+  const auto start = [cArgs, cEnv, command, executable]() {
+    auto err =
+        execve(executable.c_str(), const_cast<char *const *>(cArgs.data()),
+               const_cast<char *const *>(cEnv.data()));
     if (err) {
       std::cerr << "Unexpected error while running executable: " << errno
                 << "\n";
     }
   };
 
+  json replayFileMap;
+
+  if (packedReproducer) {
+    std::ifstream fileMap{tracePath / kReplayFileMapConfigName};
+    fileMap >> replayFileMap;
+    fileMap.close();
+  }
+
   if (opts.no_fork()) {
     start();
   } else {
     pid child = fork(start);
-    child.wait();
+    Tracer tracer(child);
+
+    if (packedReproducer) {
+      tracer.onFileOpen([&](const std::string &filename, const OpenHandler &h) {
+        std::string newFN = replayFileMap[filename].get<std::string>();
+        if (!newFN.empty()) {
+          h.execute(newFN);
+        } else {
+          h.execute();
+        }
+      });
+    }
   }
 }
