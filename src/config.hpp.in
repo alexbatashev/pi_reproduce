@@ -1,0 +1,9 @@
+#pragma once
+
+#cmakedefine BUILD_DEBUGGER
+
+#ifdef BUILD_DEBUGGER
+inline constexpr bool kHasDebugger = true;
+#else
+inline constexpr bool kHasDebugger = false;
+#endif

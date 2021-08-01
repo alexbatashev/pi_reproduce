@@ -1,5 +1,6 @@
 #include "common.hpp"
 #include "options.hpp"
+#include "config.hpp"
 
 #include <fmt/color.h>
 #include <fmt/core.h>
@@ -68,7 +69,11 @@ int main(int argc, char *argv[], char *env[]) {
     } else if (opts.command() == options::mode::pack) {
       pack(opts);
     } else if (opts.command() == options::mode::debug) {
-      debug(opts);
+      if constexpr (kHasDebugger) {
+        debug(opts);
+      } else {
+        std::cerr << "dpcpp_trace was build without debugger support\n";
+      }
     }
   } catch (std::runtime_error &err) {
     std::cerr << "CLI error: " << err.what() << "\n";

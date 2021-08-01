@@ -4,6 +4,8 @@ if (BUILD_DEBUGGER)
   add_subdirectory(debug_server)
 endif()
 
+configure_file(config.hpp.in ${PROJECT_BINARY_DIR}/include/config.hpp)
+
 add_dpcpp_trace_library(options STATIC options.cpp)
 
 add_dpcpp_trace_executable(dpcpp_trace

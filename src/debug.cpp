@@ -3,4 +3,10 @@
 
 #include "debug_server/server.hpp"
 
-void debug(const options &opts) { DebugServer server; }
+#include <iostream>
+
+void debug(const options &opts) {
+  DebugServer server;
+  std::cout << "Starting server on localhost:1111\n";
+  server.run();
+}

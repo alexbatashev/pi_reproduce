@@ -6,6 +6,7 @@ macro(set_dpcpp_trace_common_options target_name)
   target_include_directories(${target_name} PRIVATE
     ${OpenCL_INCLUDE_DIRS}
     ${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_BINARY_DIR}/include
     ${INTEL_LLVM_BINARY_PATH}/include/sycl
     ${INTEL_LLVM_SOURCE_PATH}/sycl/tools/xpti_helpers
     ${INTEL_LLVM_SOURCE_PATH}/xpti/include)

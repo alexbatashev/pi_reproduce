@@ -3,4 +3,4 @@ add_dpcpp_trace_library(debug_server STATIC
 )
 
 find_package(Boost REQUIRED COMPONENTS system)
-target_link_libraries(debug_server PUBLIC Boost::boost Boost::system)
+target_link_libraries(debug_server PUBLIC fmt::fmt Boost::boost Boost::system)
