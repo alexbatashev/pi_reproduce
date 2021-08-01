@@ -30,7 +30,10 @@ void options::parseRecordOptions(int argc, char *argv[]) {
         throw std::runtime_error("--output requires an argument\n");
       }
       mOutput = argv[++i];
-    } else if ((opt == "--skip-mem-objects" || opt == "-s") && !mRecordSkipMemObjs) {
+    } else if (opt == "--override" && !mRecordOverrideTrace) {
+      mRecordOverrideTrace = true;
+    } else if ((opt == "--skip-mem-objects" || opt == "-s") &&
+               !mRecordSkipMemObjs) {
       mRecordSkipMemObjs = true;
     } else if (opt == "--no-fork" && !mNoFork) {
       mNoFork = true;
