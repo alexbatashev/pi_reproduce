@@ -5,12 +5,14 @@ inline constexpr auto kTracePathEnvVar = "DPCPP_TRACE_DATA_PATH";
 inline constexpr auto kPIDebugStreamName = "sycl.pi.debug";
 
 inline constexpr auto kFilesConfigName = "files_config.json";
+inline constexpr auto kPackedDataPath = "pack";
 
 // Replay config constants
 inline constexpr auto kReplayConfigName = "replay_config.json";
 inline constexpr auto kReplayFileMapConfigName = "replay_file_map.json";
 
 inline constexpr auto kReplayCommand = "command";
+inline constexpr auto kReplayExecutable = "executable";
 inline constexpr auto kReplayArguments = "arguments";
 
 inline constexpr auto kRecordMode = "recordMode";

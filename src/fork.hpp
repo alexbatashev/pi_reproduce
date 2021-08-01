@@ -14,7 +14,7 @@ public:
   pid() = default;
   explicit pid(pid_t val) : mPid(val) {}
 
-  void wait() {
+  void wait() const {
     int status;
     waitpid(mPid, &status, 0);
     // todo add error handling
@@ -22,7 +22,7 @@ public:
 
   ~pid() = default;
 
-  native_type get_native() { return mPid; }
+  native_type get_native() const noexcept { return mPid; }
 
 private:
   native_type mPid;

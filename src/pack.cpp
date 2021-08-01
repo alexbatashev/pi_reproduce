@@ -16,20 +16,30 @@ void pack(const options &opts) {
     exit(EXIT_FAILURE);
   }
 
-  constexpr auto outPath = "packed";
-
-  if (std::filesystem::exists(opts.input() / outPath)) {
+  if (std::filesystem::exists(opts.input() / kPackedDataPath)) {
     std::cerr << "Trace is already packed\n";
     exit(EXIT_FAILURE);
   }
 
-  std::filesystem::create_directory(opts.input() / outPath);
+  std::filesystem::create_directory(opts.input() / kPackedDataPath);
 
   std::ifstream recordFilesConfig{opts.input() / kFilesConfigName};
   json recordFiles;
   recordFilesConfig >> recordFiles;
 
   json replayMap;
+
+  std::ifstream replayConfigIn{opts.input() / kReplayConfigName};
+  json replayConfig;
+  replayConfigIn >> replayConfig;
+  replayConfigIn.close();
+
+  std::filesystem::path executable{
+      replayConfig[kReplayExecutable].get<std::string>()};
+  std::filesystem::copy_file(executable, opts.input() / kPackedDataPath / "0");
+
+  replayMap[executable.string()] = "0";
+
   size_t counter = 1;
 
   for (auto &element : recordFiles) {
@@ -47,18 +57,14 @@ void pack(const options &opts) {
 
     std::string newFileName = std::to_string(counter++);
 
-    std::filesystem::copy_file(candPath, opts.input() / outPath / newFileName);
+    std::filesystem::copy_file(candPath,
+                               opts.input() / kPackedDataPath / newFileName);
     replayMap[candString] = newFileName;
   }
 
   std::ofstream replayFilesMapConfig{opts.input() / kReplayFileMapConfigName};
   replayFilesMapConfig << replayMap.dump(2);
   replayFilesMapConfig.close();
-
-  std::ifstream replayConfigIn{opts.input() / kReplayConfigName};
-  json replayConfig;
-  replayConfigIn >> replayConfig;
-  replayConfigIn.close();
 
   replayConfig[kRecordMode] = kRecordModeFull;
 

@@ -1,6 +1,7 @@
 #include "trace.hpp"
 
 #include <errno.h>
+#include <linux/limits.h>
 #include <stdexcept>
 #include <string.h>
 #include <sys/ptrace.h>
@@ -49,6 +50,49 @@ static std::string readString(pid pid, std::uintptr_t addr) {
   return result;
 }
 
+void OpenHandler::execute() const {
+  if (ptrace(PTRACE_SYSCALL, mPid.get_native(), 0, 0) == -1)
+    throw std::runtime_error(strerror(errno));
+  if (waitpid(mPid.get_native(), 0, 0) == -1)
+    throw std::runtime_error(strerror(errno));
+}
+
+void OpenHandler::execute(std::string_view newFileName) const {
+  char *stackAddr, *fileAddr;
+
+  stackAddr = reinterpret_cast<char *>(ptrace(
+      PTRACE_PEEKUSER, mPid.get_native(), sizeof(long) * mStackAddr, nullptr));
+  stackAddr -= 128 + PATH_MAX;
+
+  fileAddr = stackAddr;
+
+  bool end = false;
+  while (!end) {
+    size_t offset = 0;
+    union pokeData {
+      long data;
+      std::array<char, sizeof(long)> buf;
+    };
+
+    pokeData data;
+    for (size_t i = 0; i < sizeof(long), i + offset <= newFileName.size();
+         i++) {
+      if (i + offset == newFileName.size()) [[unlikely]] {
+        data.buf[i] = '\0';
+      } else {
+        data.buf[i] = newFileName[offset + i];
+      }
+    }
+
+    ptrace(PTRACE_POKEDATA, mPid.get_native(), stackAddr, data.data);
+    stackAddr += sizeof(long);
+  }
+
+  ptrace(PTRACE_POKEUSER, mPid.get_native(), sizeof(long) * mFileNameRegister,
+         fileAddr);
+  execute();
+}
+
 void Tracer::run() {
   mPid.wait();
   ptrace(PTRACE_SETOPTIONS, mPid.get_native(), 0, PTRACE_O_EXITKILL);
@@ -67,18 +111,19 @@ void Tracer::run() {
 
     switch (syscall) {
     case SYS_openat: {
+      OpenHandler handler{mPid, regs.rsp, regs.rsi};
       std::string filename = readString(mPid, regs.rsi);
-      mFileOpenHandler(filename);
+      mFileOpenHandler(filename, handler);
       break;
     }
-    default:
-      break;
+    default: {
+      if (ptrace(PTRACE_SYSCALL, mPid.get_native(), 0, 0) == -1)
+        throw std::runtime_error(strerror(errno));
+      if (waitpid(mPid.get_native(), 0, 0) == -1)
+        throw std::runtime_error(strerror(errno));
+    }
     }
 
-    if (ptrace(PTRACE_SYSCALL, mPid.get_native(), 0, 0) == -1)
-      throw std::runtime_error(strerror(errno));
-    if (waitpid(mPid.get_native(), 0, 0) == -1)
-      throw std::runtime_error(strerror(errno));
     if (ptrace(PTRACE_GETREGS, mPid.get_native(), 0, &regs) == -1) {
       if (errno == ESRCH)
         return;
