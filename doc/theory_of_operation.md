@@ -106,3 +106,8 @@ copy application executable and its dependencies into trace directory. A special
 files and their packed versions. On Linux, paths, that start with `/dev`,
 `/sys`, or `/proc` are skipped.
 
+### Replaying
+When `dpcpp_trace replay` is invoked, the tool checks for `replay_file_map.json`
+file and sets up hooks for system calls. If the original file is found in the
+map, it will be redirected inside trace directory. It is illegal to pass command
+line arguments to `replay` if trace contains packed reproducer.
