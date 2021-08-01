@@ -24,19 +24,21 @@ jobs:
           submodules: true
       - name: Install dependencies
         run: |
-          apt update && apt install -yqq wget python3-pip
+          apt update && apt install -yqq wget python3-pip ocl-icd-opencl-dev
           wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB -O - | apt-key add -
           echo "deb https://apt.repos.intel.com/oneapi all main" | tee /etc/apt/sources.list.d/oneAPI.list
-          apt update && apt install intel-oneapi-runtime-opencl
+          rm -rf /var/lib/apt/lists/*
+          apt update
+          apt install intel-oneapi-runtime-opencl
           pip3 install --user lit filecheck
       - name: Build & test
         run: |
-          apt update && apt install -yqq ocl-icd-opencl-dev
           mkdir build
           mkdir install
           cd build
           cmake -DINTEL_LLVM_SOURCE_PATH=/src/llvm -DINTEL_LLVM_BINARY_PATH=/src/llvm/build -GNinja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install ..
           ninja
+          ninja check-dpcpp_trace
           ctest
       - name: Install
         run: cd build && ninja install
