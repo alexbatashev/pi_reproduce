@@ -30,7 +30,7 @@ jobs:
           rm -rf /var/lib/apt/lists/*
           apt update
           apt install -yqq intel-oneapi-runtime-opencl
-          pip3 install --user lit filecheck
+          pip3 install lit filecheck
       - name: Build & test
         run: |
           mkdir build
