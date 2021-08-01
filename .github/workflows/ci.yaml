@@ -24,8 +24,7 @@ jobs:
           submodules: true
       - name: Build & test
         run: |
-          git clone https://github.com/KhronosGroup/OpenCL-Headers.git
-          mv OpenCL-Headers/CL /usr/include/
+          apt update && apt install -yqq ocl-icd-dev
           mkdir build
           mkdir install
           cd build
