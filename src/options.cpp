@@ -143,6 +143,19 @@ void options::parsePackOptions(int argc, char *argv[]) {
   mInput = argv[2];
 }
 
+void options::parseDebugOptions(int argc, char *argv[]) {
+  int i = 2;
+  while (i < argc) {
+    std::string_view opt{argv[i]};
+
+    if (opt == "--server" && !mDebugServerOnly) {
+      mDebugServerOnly = true;
+    }
+
+    i++;
+  }
+}
+
 options::options(int argc, char *argv[], char *env[]) {
   if (argc < 2) {
     std::cerr << "Use dpcpp_trace info to see available options";
@@ -175,5 +188,8 @@ options::options(int argc, char *argv[], char *env[]) {
   } else if (command == "pack") {
     mMode = mode::pack;
     parsePackOptions(argc, argv);
+  } else if (command == "debug") {
+    mMode = mode::debug;
+    parseDebugOptions(argc, argv);
   }
 }
