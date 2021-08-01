@@ -4,13 +4,16 @@
 #include "trace.hpp"
 #include "utils.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <fmt/core.h>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <nlohmann/json.hpp>
+#include <ranges>
 #include <string>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -43,43 +46,32 @@ void replay(const options &opts) {
         "Command line arguments are not supported for packed reproducers");
   }
 
-  std::string command;
   std::string executable;
-  std::vector<std::string> strArgs;
-  std::vector<const char *> cArgs;
+  std::vector<std::string> execArgs;
 
-  std::string_view path{getenv("PATH")};
+  const auto toString = [](std::string_view v) { return std::string{v}; };
 
   if (hasCLI) {
     if (!std::filesystem::exists(opts.input())) {
-      executable = which(path, opts.input().string());
+      executable = which(opts.input().string());
     } else {
       executable = opts.input().string();
     }
-    command = opts.input().string();
-    const auto &args = opts.args();
-    strArgs = opts.args();
-    cArgs.reserve(args.size() + 2);
-    cArgs.push_back(command.c_str());
-
-    for (auto &arg : args) {
-      cArgs.push_back(arg.c_str());
-    }
+    execArgs.push_back(opts.input().string());
+    std::transform(opts.args().begin(), opts.args().end(),
+                   std::back_inserter(execArgs), toString);
   } else {
     if (packedReproducer) {
       executable = opts.input() / kPackedDataPath / "0";
     } else {
       executable = replayConfig[kReplayExecutable].get<std::string>();
     }
-    command = replayConfig[kReplayCommand].get<std::string>();
-    cArgs.push_back(command.c_str());
-    for (const auto &arg : replayConfig[kReplayArguments]) {
-      strArgs.push_back(arg.get<std::string>());
-      cArgs.push_back(strArgs.back().c_str());
+    execArgs.push_back(replayConfig[kReplayCommand].get<std::string>());
+    const json jsonArgs = replayConfig[kReplayArguments];
+    for (const auto &el : jsonArgs) {
+      execArgs.push_back(el.get<std::string>());
     }
   }
-
-  cArgs.push_back(nullptr);
 
   std::string outPath =
       std::string(kTracePathEnvVar) + "=" + tracePath.string();
@@ -113,66 +105,55 @@ void replay(const options &opts) {
       fmt::print("SYCL_OVERRIDE_PI_CUDA=libplugin_replay.so \\\n");
     if (hasROCm)
       fmt::print("SYCL_OVERRIDE_PI_ROCM=libplugin_replay.so \\\n");
-    fmt::print("{}", command);
-    for (auto &arg : strArgs) {
+    fmt::print("{}", executable);
+    for (auto &arg : execArgs | std::views::drop(1)) {
       fmt::print(" {} ", arg);
     }
     fmt::print("\n");
     return;
   }
 
-  std::vector<const char *> cEnv;
-  cEnv.reserve(opts.env().size() + 6);
-  for (auto e : opts.env()) {
-    if (e.find("LD_LIBRARY_PATH") == std::string::npos)
-      cEnv.push_back(e.data());
-  }
-  cEnv.push_back("LD_PRELOAD=libsystem_intercept.so");
-  if (hasOpenCL)
-    cEnv.push_back("SYCL_OVERRIDE_PI_OPENCL=libplugin_replay.so");
-  if (hasLevelZero)
-    cEnv.push_back("SYCL_OVERRIDE_PI_LEVEL_ZERO=libplugin_replay.so");
-  if (hasCUDA)
-    cEnv.push_back("SYCL_OVERRIDE_PI_CUDA=libplugin_replay.so");
-  if (hasROCm)
-    cEnv.push_back("SYCL_OVERRIDE_PI_ROCM=libplugin_replay.so");
-  cEnv.push_back(fullLDPath.c_str());
-  cEnv.push_back(outPath.c_str());
-  cEnv.push_back(nullptr);
-
-  const auto start = [cArgs, cEnv, command, executable]() {
-    auto err =
-        execve(executable.c_str(), const_cast<char *const *>(cArgs.data()),
-               const_cast<char *const *>(cEnv.data()));
-    if (err) {
-      std::cerr << "Unexpected error while running executable: " << errno
-                << "\n";
-    }
+  const auto allowedEnvVar = [](std::string_view var) {
+    return !var.starts_with("LD_LIBRARY_PATH");
   };
 
-  json replayFileMap;
+  std::vector<std::string> env;
+  for (auto e : opts.env()) {
+    if (allowedEnvVar(e))
+      env.push_back(toString(e));
+  }
+  env.emplace_back("LD_PRELOAD=libsystem_intercept.so");
+  if (hasOpenCL)
+    env.emplace_back("SYCL_OVERRIDE_PI_OPENCL=libplugin_replay.so");
+  if (hasLevelZero)
+    env.emplace_back("SYCL_OVERRIDE_PI_LEVEL_ZERO=libplugin_replay.so");
+  if (hasCUDA)
+    env.emplace_back("SYCL_OVERRIDE_PI_CUDA=libplugin_replay.so");
+  if (hasROCm)
+    env.emplace_back("SYCL_OVERRIDE_PI_ROCM=libplugin_replay.so");
+  env.push_back(fullLDPath);
+  env.push_back(outPath);
+
+  Tracer tracer;
 
   if (packedReproducer) {
+    json replayFileMap;
+
     std::ifstream fileMap{tracePath / kReplayFileMapConfigName};
     fileMap >> replayFileMap;
     fileMap.close();
-  }
 
-  if (opts.no_fork()) {
-    start();
-  } else {
-    pid child = fork(start);
-    Tracer tracer(child);
-
-    if (packedReproducer) {
-      tracer.onFileOpen([&](const std::string &filename, const OpenHandler &h) {
+    tracer.onFileOpen([=](const std::string &filename, const OpenHandler &h) {
+      if (replayFileMap.contains(filename)) {
         std::string newFN = replayFileMap[filename].get<std::string>();
-        if (!newFN.empty()) {
-          h.execute(newFN);
-        } else {
-          h.execute();
-        }
-      });
-    }
+        h.execute(newFN);
+      } else {
+        h.execute();
+      }
+    });
   }
+
+  exit_code c = exec(executable, execArgs, env, tracer);
+  if (c != exit_code::success)
+    std::cerr << "Application exited with failure code\n";
 }

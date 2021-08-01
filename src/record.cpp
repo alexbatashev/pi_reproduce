@@ -10,7 +10,9 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <nlohmann/json.hpp>
+#include <ranges>
 #include <string>
 #include <string_view>
 
@@ -42,18 +44,16 @@ void record(const options &opts) {
     std::terminate();
   }
 
-  std::ofstream env{opts.output() / "env"};
+  std::ofstream envFile{opts.output() / "env"};
   for (auto entry : opts.env()) {
-    env << entry << "\n";
+    envFile << entry << "\n";
   }
-  env.close();
-
-  auto path = std::string(std::getenv("PATH"));
+  envFile.close();
 
   std::string executable = opts.input().string();
 
   if (!std::filesystem::exists(opts.input())) {
-    executable = which(path, executable);
+    executable = which(executable);
   }
 
   const auto &args = opts.args();
@@ -82,14 +82,12 @@ void record(const options &opts) {
     replayConfigFile.close();
   }
 
-  std::vector<const char *> cArgs;
-  cArgs.reserve(args.size() + 2);
+  const auto toString = [](std::string_view v) { return std::string{v}; };
 
-  cArgs.push_back(opts.input().c_str());
-  for (auto &arg : args) {
-    cArgs.push_back(arg.c_str());
-  }
-  cArgs.push_back(nullptr);
+  std::vector<std::string> execArgs;
+  execArgs.push_back(opts.input().string());
+  std::transform(args.begin(), args.end(), std::back_inserter(execArgs),
+                 toString);
 
   std::string outPath = std::string(kTracePathEnvVar) + "=" + opts.output().c_str();
 
@@ -97,56 +95,38 @@ void record(const options &opts) {
   ldLibraryPath += (opts.location() / ".." / "lib").string() + ":";
   ldLibraryPath += std::string(std::getenv("LD_LIBRARY_PATH"));
 
-  std::vector<const char *> cEnv;
-  cEnv.reserve(opts.env().size() + 7);
-  for (auto e : opts.env()) {
-    if (e.find("LD_LIBRARY_PATH") == std::string::npos)
-      cEnv.push_back(e.data());
-  }
-  cEnv.push_back("XPTI_TRACE_ENABLE=1");
-  cEnv.push_back("XPTI_FRAMEWORK_DISPATCHER=libxptifw.so");
-  cEnv.push_back("LD_PRELOAD=libsystem_intercept.so");
-  cEnv.push_back(ldLibraryPath.c_str());
-  cEnv.push_back("XPTI_SUBSCRIBERS=libgraph_dump.so,libplugin_record.so");
-  cEnv.push_back(outPath.c_str());
+  std::vector<std::string> env;
+  std::transform(opts.env().begin(), opts.env().end(), std::back_inserter(env),
+                 toString);
+  env.emplace_back("XPTI_TRACE_ENABLE=1");
+  env.emplace_back("XPTI_FRAMEWORK_DISPATCHER=libxptifw.so");
+  env.emplace_back("LD_PRELOAD=libsystem_intercept.so");
+  env.emplace_back("XPTI_SUBSCRIBERS=libgraph_dump.so,libplugin_record.so");
+  env.push_back(ldLibraryPath.c_str());
+  env.push_back(outPath.c_str());
 
   std::string skipVal = kSkipMemObjsEnvVar;
   skipVal += "=1";
   if (opts.record_skip_mem_objects()) {
-    cEnv.push_back(skipVal.c_str());
+    env.push_back(skipVal);
   }
 
-  cEnv.push_back(nullptr);
+  Tracer tracer;
 
-  const auto start = [&]() {
-    traceMe();
-    auto err =
-        execve(executable.c_str(), const_cast<char *const *>(cArgs.data()),
-               const_cast<char *const *>(cEnv.data()));
-    if (err) {
-      std::cerr << "Unexpected error while running executable: " << errno
-                << "\n";
-    }
-  };
+  json files;
 
-  if (opts.no_fork()) {
-    start();
-  } else {
-    pid child = fork(start);
-    Tracer tracer(child);
+  tracer.onFileOpen(
+      [&files](const std::string &fileName, const OpenHandler &h) {
+        files.push_back(fileName);
+        h.execute();
+      });
 
-    json files;
+  exit_code c = exec(executable, execArgs, env, tracer);
 
-    tracer.onFileOpen(
-        [&files](const std::string &fileName, const OpenHandler &h) {
-          files.push_back(fileName);
-          h.execute();
-        });
+  if (c != exit_code::success)
+    std::cerr << "Application finished with errors\n";
 
-    tracer.run();
-
-    std::ofstream filesOut{opts.output() / kFilesConfigName};
-    filesOut << files.dump(4);
-    filesOut.close();
-  }
+  std::ofstream filesOut{opts.output() / kFilesConfigName};
+  filesOut << files.dump(4);
+  filesOut.close();
 }

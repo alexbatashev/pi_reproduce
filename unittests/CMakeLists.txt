@@ -11,5 +11,4 @@ list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/contrib)
 include(CTest)
 include(Catch)
 
-add_subdirectory(options)
-add_subdirectory(misc)
+add_subdirectory(utils)
