@@ -17,6 +17,7 @@ RUN cd llvm && mkdir build && cd build && \
       python3 ../buildbot/configure.py --no-werror \
       --llvm-external-projects="lldb" \
       --cmake-opt="-DCMAKE_INSTALL_PREFIX=/src/llvm_install" \
-      && ninja sycl-toolchain lldb && ninja install && cd .. && rm -rf build
+      && ninja sycl-toolchain lldb && ninja install && \
+      cp lib/libxptifw.so /src/llvm_install/lib && cd .. && rm -rf build
 
 ENTRYPOINT [ /bin/bash ]
