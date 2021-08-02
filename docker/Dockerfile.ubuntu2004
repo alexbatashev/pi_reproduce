@@ -2,12 +2,13 @@ FROM ubuntu:20.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN echo "deb http://security.ubuntu.com/ubuntu hirsute-security main universe" > /etc/apt/sources.list
+RUN echo "deb http://security.ubuntu.com/ubuntu hirsute-security main universe" >> /etc/apt/sources.list
 RUN apt update && apt install -yqq libc-dev \
      cmake \
      ninja-build \
      python3 \
-     git
+     git \
+     gcc-11 g++-11
 RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 110 \
       --slave /usr/bin/g++ g++ /usr/bin/g++-11 --slave /usr/bin/gcov gcov \
       /usr/bin/gcov-11 --slave /usr/bin/gcc-ar gcc-ar /usr/bin/gcc-ar-11 \
