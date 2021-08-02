@@ -1,4 +1,4 @@
-name: Ubuntu 20.04 build image
+name: GCC 11.2 build image
 
 on:
   schedule:
@@ -24,4 +24,4 @@ jobs:
             ghcr.io/${{ github.repository }}:${{ github.sha }}
             ghcr.io/${{ github.repository }}:latest
           context: ${{ github.workspace }}/docker/
-          file: ${{ github.workspace }}/docker/Dockerfile.ubuntu2004
+          file: ${{ github.workspace }}/docker/gcc11.Dockerfile
