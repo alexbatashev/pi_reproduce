@@ -37,7 +37,9 @@ jobs:
           mkdir build
           mkdir install
           cd build
-          export LIT_ARGS="-vv;--max-time;100"
+          export LIT_ARGS="-vv;--timeout;100"
+          export OCL_ICD_VENDORS=/opt/intel/oneapi/lib/etc/
+          export LD_LIBRARY_PATH=/opt/intel/oneapi/lib/intel64/:$LD_LIBRARY_PATH
           cmake -DINTEL_LLVM_SOURCE_PATH=/src/llvm -DINTEL_LLVM_BINARY_PATH=/src/llvm_install -GNinja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install ..
           ninja
           ninja check-dpcpp_trace
