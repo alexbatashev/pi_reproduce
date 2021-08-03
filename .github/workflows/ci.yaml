@@ -15,7 +15,7 @@ jobs:
     # Temporarily disable this job until there's a robust way to get latest SYCL
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/alexbatashev/dpcpp_trace:13f16ac22e2f986b077a229922df57f8faf00938
+      image: ghcr.io/alexbatashev/dpcpp_trace:66cb8367e289d67d161d579b45d43b269ba3863f
       volumes:
         - ${{ github.workspace }}:${{ github.workspace }}
     steps:
