@@ -15,5 +15,5 @@ if (DEFINED ENV{LIT_ARGS})
 endif()
 
 add_custom_target(check-dpcpp_trace
-  COMMAND ${LIT_TOOL} "${LIT_OPTS}" ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND ${LIT_TOOL} ${LIT_OPTS} ${CMAKE_CURRENT_BINARY_DIR}
   USES_TERMINAL)
