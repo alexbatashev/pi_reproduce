@@ -1,8 +1,9 @@
-FROM gcc:11.2
+FROM ubuntu:21.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt update && apt install -yqq \
+     build-essential \
      cmake \
      ninja-build \
      python3 \
