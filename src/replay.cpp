@@ -151,6 +151,14 @@ void replay(const options &opts) {
         h.execute();
       }
     });
+    tracer.onStat([=](const std::string &filename, const StatHandler &h) {
+      if (replayFileMap.contains(filename)) {
+        std::string newFN = replayFileMap[filename].get<std::string>();
+        h.execute(newFN);
+      } else {
+        h.execute();
+      }
+    });
   }
 
   exit_code c = exec(executable, execArgs, env, tracer);
