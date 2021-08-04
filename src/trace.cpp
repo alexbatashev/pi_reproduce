@@ -13,7 +13,7 @@
 
 void traceMe() { ptrace(PTRACE_TRACEME, 0, 0, 0); }
 
-Tracer::Tracer(pid p) : mPid(p) {}
+void Tracer::attach(pid p) { mPid = p; }
 
 static std::string readString(pid pid, std::uintptr_t addr) {
   constexpr size_t longSize = sizeof(long);
@@ -93,7 +93,7 @@ void OpenHandler::execute(std::string_view newFileName) const {
   execute();
 }
 
-void Tracer::run() {
+int Tracer::run() {
   mPid.wait();
   ptrace(PTRACE_SETOPTIONS, mPid.get_native(), 0, PTRACE_O_EXITKILL);
 
@@ -126,7 +126,7 @@ void Tracer::run() {
 
     if (ptrace(PTRACE_GETREGS, mPid.get_native(), 0, &regs) == -1) {
       if (errno == ESRCH)
-        return;
+        return 0;
       throw std::runtime_error(strerror(errno));
     }
   }

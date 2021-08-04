@@ -26,6 +26,8 @@ if "cuda:" in str(devices_res.stdout):
 if "rocm:" in str(devices_res.stdout):
     config.available_features.add('rocm')
 
+config.available_features.add('DISABLED')
+
 config.substitutions.append(('%dpcpp_trace', config.dpcpp_trace_bin_dir + "/dpcpp_trace"))
 config.substitutions.append(('%clangxx', config.intel_llvm_bin_root + "/bin/clang++"))
 config.substitutions.append(('%sycl_ls', config.intel_llvm_bin_root + "/bin/sycl-ls"))

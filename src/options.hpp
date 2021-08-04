@@ -23,13 +23,15 @@ public:
 
   bool performance_summary() const noexcept { return mPrintPerformanceSummary; }
 
-  const std::vector<std::string> &args() const noexcept { return mArguments; }
+  const std::vector<std::string_view> &args() const noexcept {
+    return mArguments;
+  }
 
   std::filesystem::path location() const noexcept {
     return mExecutablePath.parent_path();
   }
 
-  auto env() const noexcept { return mEnvVars; }
+  const std::vector<std::string_view> &env() const noexcept { return mEnvVars; }
 
   bool record_skip_mem_objects() const noexcept { return mRecordSkipMemObjs; }
 
@@ -49,7 +51,7 @@ private:
   std::filesystem::path mExecutablePath;
   std::filesystem::path mInput;
   std::filesystem::path mOutput;
-  std::vector<std::string> mArguments;
+  std::vector<std::string_view> mArguments;
   mode mMode;
   print_group_by mPringGroup = print_group_by::none;
   bool mPrintPerformanceSummary = false;

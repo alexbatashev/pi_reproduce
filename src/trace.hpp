@@ -21,14 +21,16 @@ private:
 
 class Tracer {
 public:
-  Tracer(pid);
+  Tracer() = default;
+
+  void attach(pid p);
 
   void onFileOpen(
       std::function<void(const std::string &, const OpenHandler &)> handler) {
     mFileOpenHandler = handler;
   }
 
-  void run();
+  int run();
 
 private:
   std::function<void(const std::string &, const OpenHandler &)>

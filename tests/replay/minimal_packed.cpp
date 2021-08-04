@@ -1,4 +1,5 @@
 // REQUIRES: linux
+// UNSUPPORTED: DISABLED
 // RUN: echo "1" > %t.txt
 // RUN: %clangxx %s -o %t.exe
 // RUN: %dpcpp_trace record --override -o %t_trace %t.exe -- %t.txt
