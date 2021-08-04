@@ -50,18 +50,11 @@ static std::string readString(pid pid, std::uintptr_t addr) {
   return result;
 }
 
-void OpenHandler::execute() const {
-  if (ptrace(PTRACE_SYSCALL, mPid.get_native(), 0, 0) == -1)
-    throw std::runtime_error(strerror(errno));
-  if (waitpid(mPid.get_native(), 0, 0) == -1)
-    throw std::runtime_error(strerror(errno));
-}
-
-void OpenHandler::execute(std::string_view newFileName) const {
+static void writeString(pid pid, std::uintptr_t addr, std::uintptr_t reg, std::string_view str) {
   char *stackAddr, *fileAddr;
 
   stackAddr = reinterpret_cast<char *>(ptrace(
-      PTRACE_PEEKUSER, mPid.get_native(), sizeof(long) * mStackAddr, nullptr));
+      PTRACE_PEEKUSER, pid.get_native(), sizeof(long) * addr, nullptr));
   stackAddr -= 128 + PATH_MAX;
 
   fileAddr = stackAddr;
@@ -75,21 +68,44 @@ void OpenHandler::execute(std::string_view newFileName) const {
     };
 
     pokeData data;
-    for (size_t i = 0; i < sizeof(long), i + offset <= newFileName.size();
+    for (size_t i = 0; i < sizeof(long), i + offset <= str.size();
          i++) {
-      if (i + offset == newFileName.size()) [[unlikely]] {
+      if (i + offset == str.size()) [[unlikely]] {
         data.buf[i] = '\0';
       } else {
-        data.buf[i] = newFileName[offset + i];
+        data.buf[i] = str[offset + i];
       }
     }
 
-    ptrace(PTRACE_POKEDATA, mPid.get_native(), stackAddr, data.data);
+    ptrace(PTRACE_POKEDATA, pid.get_native(), stackAddr, data.data);
     stackAddr += sizeof(long);
   }
 
-  ptrace(PTRACE_POKEUSER, mPid.get_native(), sizeof(long) * mFileNameRegister,
+  ptrace(PTRACE_POKEUSER, pid.get_native(), sizeof(long) * reg,
          fileAddr);
+}
+
+void OpenHandler::execute() const {
+  if (ptrace(PTRACE_SYSCALL, mPid.get_native(), 0, 0) == -1)
+    throw std::runtime_error(strerror(errno));
+  if (waitpid(mPid.get_native(), 0, 0) == -1)
+    throw std::runtime_error(strerror(errno));
+}
+
+void OpenHandler::execute(std::string_view newFileName) const {
+  writeString(mPid, mStackAddr, mFileNameRegister, newFileName);
+  execute();
+}
+
+void StatHandler::execute() const {
+  if (ptrace(PTRACE_SYSCALL, mPid.get_native(), 0, 0) == -1)
+    throw std::runtime_error(strerror(errno));
+  if (waitpid(mPid.get_native(), 0, 0) == -1)
+    throw std::runtime_error(strerror(errno));
+}
+
+void StatHandler::execute(std::string_view newFileName) const {
+  writeString(mPid, mStackAddr, mFileNameRegister, newFileName);
   execute();
 }
 
@@ -110,6 +126,12 @@ int Tracer::run() {
     const long syscall = regs.orig_rax;
 
     switch (syscall) {
+    case SYS_stat: {
+      StatHandler handler{mPid, regs.rsp, regs.rdi};
+      std::string filename = readString(mPid, regs.rdi);
+      mStatHandler(filename, handler);
+      break;
+    }
     case SYS_openat: {
       OpenHandler handler{mPid, regs.rsp, regs.rsi};
       std::string filename = readString(mPid, regs.rsi);
