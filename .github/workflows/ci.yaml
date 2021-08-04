@@ -18,7 +18,7 @@ jobs:
       image: ghcr.io/alexbatashev/dpcpp_trace:2d4e5dcc7d7fccc7c0d24c1bb70bfb572304f99f
       volumes:
         - ${{ github.workspace }}:${{ github.workspace }}
-      options: --cap-add SYS_PTRACE
+      options: --cap-add SYS_PTRACE --cap-add SYS_ADMIN
     steps:
       - uses: actions/checkout@v2
         with:
