@@ -12,12 +12,18 @@ macro(set_dpcpp_trace_common_options target_name)
     ${INTEL_LLVM_SOURCE_PATH}/xpti/include)
   target_link_directories(${target_name} PRIVATE ${INTEL_LLVM_BINARY_PATH}/lib)
 
-  target_link_libraries(${target_name} PRIVATE xptifw)
   target_compile_definitions(${target_name} PRIVATE -DCL_TARGET_OPENCL_VERSION=300)
 
   set_target_properties(${target_name} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin
     )
+
+  if (DPCPP_TRACE_LINK_STATICALLY)
+    if (NOT WIN32)
+      target_compile_options(${target_name} PRIVATE -static-libstdc++)
+      target_link_options(${target_name} PRIVATE -static-libstdc++)
+    endif()
+  endif()
 endmacro()
 
 function(add_dpcpp_trace_library target_name kind)
