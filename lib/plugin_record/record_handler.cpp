@@ -63,8 +63,9 @@ static void dumpBinaryDescriptor(pi_device_binary binary, pi_uint32 idx) {
   }
 
   if (binary->ManifestStart != nullptr)
-    dump.set_manifest(binary->ManifestStart,
-                    std::distance(binary->ManifestStart, binary->ManifestEnd));
+    dump.set_manifest(
+        binary->ManifestStart,
+        std::distance(binary->ManifestStart, binary->ManifestEnd));
 
   uint64_t size;
   std::string out;
