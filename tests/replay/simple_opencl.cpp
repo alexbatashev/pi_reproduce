@@ -3,6 +3,9 @@
 // RUN: env SYCL_DEVICE_FILTER="opencl" %dpcpp_trace record --override -o %t_record %t.exe
 // RUN: env SYCL_DEVICE_FILTER="opencl" %dpcpp_trace replay %t_record | %FileCheck %s
 
+#include <cstdlib>
+#include <numeric>
+
 #include <sycl/sycl.hpp>
 
 int main() {
@@ -17,6 +20,7 @@ int main() {
 
   std::vector<int> a, b;
   a.resize(Size);
+  std::iota(a.begin(), a.end(), 0);
   b.resize(Size);
 
   sycl::buffer aBuf{a.begin(), a.end()};
@@ -33,6 +37,10 @@ int main() {
   std::cout << "Task submitted" << std::endl;
 
   queue.wait();
+
+  sycl::host_accessor acc{bBuf};
+  if (acc[3] != 3)
+    return EXIT_FAILURE;
 
   // CHECK: Success
   std::cout << "Success" << std::endl;
