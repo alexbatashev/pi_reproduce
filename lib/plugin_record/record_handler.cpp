@@ -34,9 +34,12 @@ static void dumpBinaryDescriptor(pi_device_binary binary, pi_uint32 idx) {
   dump.set_version(binary->Version);
   dump.set_kind(binary->Kind);
   dump.set_format(binary->Format);
-  dump.set_device_target_spec(binary->DeviceTargetSpec);
-  dump.set_compile_options(binary->CompileOptions);
-  dump.set_link_options(binary->LinkOptions);
+  if (binary->DeviceTargetSpec != nullptr)
+    dump.set_device_target_spec(binary->DeviceTargetSpec);
+  if (binary->CompileOptions != nullptr)
+    dump.set_compile_options(binary->CompileOptions);
+  if (binary->LinkOptions != nullptr)
+    dump.set_link_options(binary->LinkOptions);
 
   for (auto it = binary->EntriesBegin; it != binary->EntriesEnd; ++it) {
     auto entry = *dump.add_offload_entries();
@@ -54,11 +57,13 @@ static void dumpBinaryDescriptor(pi_device_binary binary, pi_uint32 idx) {
       auto &prop = *propSet.add_properties();
       prop.set_name(p->Name);
       prop.set_type(static_cast<dpcpp_trace::Property::PropertyType>(p->Type));
-      prop.set_data(static_cast<char *>(p->ValAddr), p->ValSize);
+      if (p->ValAddr != nullptr)
+        prop.set_data(static_cast<char *>(p->ValAddr), p->ValSize);
     }
   }
 
-  dump.set_manifest(binary->ManifestStart,
+  if (binary->ManifestStart != nullptr)
+    dump.set_manifest(binary->ManifestStart,
                     std::distance(binary->ManifestStart, binary->ManifestEnd));
 
   uint64_t size;
