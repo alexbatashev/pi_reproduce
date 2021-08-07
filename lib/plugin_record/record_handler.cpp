@@ -1,8 +1,8 @@
 #include "record_handler.hpp"
 #include "constants.hpp"
 #include "record.pb.h"
-#include "write_utils.hpp"
 #include "utils.hpp"
+#include "write_utils.hpp"
 
 #include <atomic>
 #include <cstdint>
