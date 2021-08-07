@@ -32,7 +32,7 @@ target_link_libraries(dpcpp_trace PRIVATE
   -lpthread
   fmt
   nlohmann_json::nlohmann_json
-  trace_reader
+  trace_proto
 )
 
 target_include_directories(dpcpp_trace PRIVATE

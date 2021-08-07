@@ -7,6 +7,10 @@ inline constexpr auto kPIDebugStreamName = "sycl.pi.debug";
 inline constexpr auto kFilesConfigName = "files_config.json";
 inline constexpr auto kPackedDataPath = "pack";
 
+inline constexpr auto kBuffersPath = "buffers";
+
+inline constexpr auto kPiTraceExt = ".pi_trace";
+
 // Replay config constants
 inline constexpr auto kReplayConfigName = "replay_config.json";
 inline constexpr auto kReplayFileMapConfigName = "replay_file_map.json";

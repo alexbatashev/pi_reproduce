@@ -34,7 +34,11 @@ if(NOT json_POPULATED)
   add_subdirectory(${json_SOURCE_DIR} ${json_BINARY_DIR} EXCLUDE_FROM_ALL)
 endif()
 
+find_package(Protobuf REQUIRED)
+
 include(AddDPCPPTrace)
+
+add_subdirectory(tools)
 
 add_subdirectory(src)
 add_subdirectory(lib)

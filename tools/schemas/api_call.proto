@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package dpcpp_trace;
+
+message ArgData {
+  enum ArgType {
+    INT32 = 0;
+    INT64 = 1;
+    UINT32 = 2;
+    UINT64 = 3;
+    POINTER = 4;
+    STRING = 5;
+  }
+
+  ArgType type = 1;
+  oneof data {
+    uint64 int_val = 2;
+    string str_val = 3;
+  }
+}
+
+message APICall {
+  uint32 function_id = 1;
+  uint64 time_start = 2;
+  uint64 time_end = 3;
+  uint32 return_value = 4;
+  repeated ArgData args = 5;
+  repeated bytes small_inputs = 6;
+  repeated bytes small_outputs = 7;
+  repeated string mem_obj_inputs = 8;
+  repeated string mem_obj_outputs = 9;
+}

@@ -1,7 +1,11 @@
 #pragma once
 
+#include "api_call.pb.h"
+#include "utils.hpp"
+
 #include <CL/sycl/detail/pi.h>
 #include <CL/sycl/detail/pi.hpp>
+#include <cstdint>
 #include <fmt/core.h>
 #include <iostream>
 
@@ -163,7 +167,30 @@ struct PrintHelper {
   }
 };
 
-template <sycl::detail::PiApiKind Kind, typename... Ts>
-void printArgs(Ts... args) {
-  PrintHelper<Kind, Ts...>::print(args...);
+inline void printArgs(
+    const google::protobuf::RepeatedPtrField<dpcpp_trace::ArgData> &args) {
+  for (const auto &arg : args) {
+    if (arg.type() == dpcpp_trace::ArgData::INT32) {
+      uint64_t valRaw = arg.int_val();
+      int64_t valBig = bit_cast<int64_t>(valRaw);
+      int32_t val = static_cast<int32_t>(valBig);
+      fmt::print("{:>20} : {}\n", "<unknown>", val);
+    } else if (arg.type() == dpcpp_trace::ArgData::INT64) {
+      uint64_t valRaw = arg.int_val();
+      int64_t val = bit_cast<int64_t>(valRaw);
+      fmt::print("{:>20} : {}\n", "<unknown>", val);
+    } else if (arg.type() == dpcpp_trace::ArgData::UINT32) {
+      uint64_t valRaw = arg.int_val();
+      uint32_t val = static_cast<uint32_t>(valRaw);
+      fmt::print("{:>20} : {}\n", "<unknown>", val);
+    } else if (arg.type() == dpcpp_trace::ArgData::UINT64) {
+      uint64_t val = arg.int_val();
+      fmt::print("{:>20} : {}\n", "<unknown>", val);
+    } else if (arg.type() == dpcpp_trace::ArgData::POINTER) {
+      uint64_t val = arg.int_val();
+      fmt::print("{:>20} : 0x{:x}\n", "<unknown ptr>", val);
+    } else if (arg.type() == dpcpp_trace::ArgData::STRING) {
+      fmt::print("{:>20} : {}\n", "<string>", arg.str_val());
+    }
+  }
 }

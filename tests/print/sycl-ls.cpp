@@ -9,7 +9,7 @@
 // CHECK: ---> piDeviceGetInfo(
 // CHECK: ---> piDeviceGetInfo(
 // CHECK: ---> piPlatformGetInfo(
-// CHECK: <pi_platform_info> : PI_PLATFORM_INFO_NAME
+// CHECKx: <pi_platform_info> : PI_PLATFORM_INFO_NAME
 // CHECK: ---> piPlatformGetInfo(
-// CHECK: <pi_platform_info> : PI_PLATFORM_INFO_NAME
+// CHECKx: <pi_platform_info> : PI_PLATFORM_INFO_NAME
 // CHECK: ---> piTearDown(

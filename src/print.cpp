@@ -1,7 +1,7 @@
 #include "common.hpp"
+#include "constants.hpp"
 #include "options.hpp"
 #include "pretty_printers.hpp"
-#include "trace_reader.hpp"
 
 #include "pi_arguments_handler.hpp"
 #include <CL/sycl/detail/pi.h>
@@ -14,48 +14,13 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <string>
 #include <vector>
 
 template <typename DstT, typename SrcT>
 DstT offset_cast(size_t offset, SrcT *ptr) {
   char *rptr = reinterpret_cast<char *>(ptr);
   return reinterpret_cast<DstT>(rptr + offset);
-} // TODO replace with pretty printers as well
-static void printProgramBuild(void *data) {
-  size_t offset = 0;
-  std::cout << "---> piProgramBuild(\n";
-  std::cout << "        <pi_program> : "
-            << *offset_cast<pi_program *>(offset, data) << "\n";
-  offset += sizeof(pi_program);
-  std::cout << "        <pi_uint32> : "
-            << *offset_cast<pi_uint32 *>(offset, data) << "\n";
-  offset += sizeof(pi_uint32);
-  std::cout << "        <const pi_device*> : "
-            << *offset_cast<const pi_device **>(offset, data) << "\n";
-  offset += sizeof(const pi_device *);
-  std::cout << "        <const char*> : "
-            << offset_cast<const char *>(offset, data) << "\n";
-  offset += strlen(offset_cast<const char *>(offset, data)) + 1;
-  std::cout << "        <unknown> : " << *offset_cast<void **>(offset, data)
-            << "\n";
-  offset += sizeof(void *);
-  std::cout << "        <void *> : " << *offset_cast<void **>(offset, data)
-            << "\n";
-  std::cout << ") ---> ";
-}
-
-static void printKernelCreate(void *data) {
-  size_t offset = 0;
-  std::cout << "---> piKernelCreate(\n";
-  std::cout << "        <pi_program> : "
-            << *offset_cast<pi_program *>(offset, data) << "\n";
-  offset += sizeof(pi_program);
-  std::cout << "        <const char*> : "
-            << offset_cast<const char *>(offset, data) << "\n";
-  offset += strlen(offset_cast<const char *>(offset, data)) + 1;
-  std::cout << "        <pi_kernel> : "
-            << *offset_cast<pi_kernel **>(offset, data) << "\n";
-  std::cout << ") ---> ";
 }
 
 struct PerformanceSummary {
@@ -65,41 +30,7 @@ struct PerformanceSummary {
   size_t totalDuration;
 };
 
-void parseTraceFile(std::vector<Record> &records, std::filesystem::path path) {
-  std::ifstream trace{path, std::ios::binary};
-  while (!trace.eof()) {
-    Record record = getNextRecord(trace, path.stem().filename().string());
-
-    if (trace.eof())
-      break;
-
-    records.push_back(std::move(record));
-  }
-}
-
-static void printRecord(sycl::xpti_helpers::PiArgumentsHandler &argHandler,
-                        Record &r, bool verbose) {
-  if (verbose) {
-    fmt::print("\n>~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n");
-    fmt::print("{:<18} : {}\n", "Thread ID", r.threadId);
-    fmt::print("{:<18} : {}\n", "Call duration", r.end - r.start);
-    fmt::print("{:<18} : {}\n\n", "Captured outputs", r.outputs.size());
-  }
-  using namespace sycl::detail;
-  if (r.functionId == static_cast<uint32_t>(PiApiKind::piProgramBuild)) {
-    printProgramBuild(r.argsData.data());
-  } else if (r.functionId == static_cast<uint32_t>(PiApiKind::piKernelCreate)) {
-    printKernelCreate(r.argsData.data());
-  } else {
-    pi_plugin plugin{};
-    argHandler.handle(r.functionId, plugin, r.result, r.argsData.data());
-  }
-  std::cout << r.result << "\n";
-
-  if (verbose) {
-    fmt::print("\n<~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
-  }
-}
+using RecordT = std::pair<std::string, dpcpp_trace::APICall>;
 
 static std::string getAPIName(uint32_t id) {
   sycl::detail::PiApiKind kind = static_cast<sycl::detail::PiApiKind>(id);
@@ -112,7 +43,50 @@ static std::string getAPIName(uint32_t id) {
 #undef _PI_API
   }
 
-  return "UNKNOWN";
+  return std::string("UNKNOWN ID : ") + std::to_string(id);
+}
+
+void parseTraceFile(std::vector<RecordT> &records, std::filesystem::path path) {
+  std::ifstream trace{path, std::ios::binary};
+
+  std::string threadId = path.stem();
+
+  while (!trace.eof()) {
+    uint32_t recordSize;
+    trace.read(reinterpret_cast<char *>(&recordSize), sizeof(uint32_t));
+
+    std::string recordData;
+    recordData.resize(recordSize + 1);
+    trace.read(recordData.data(), recordSize);
+
+    dpcpp_trace::APICall record;
+    record.ParseFromString(recordData);
+
+    if (trace.eof())
+      break;
+
+    records.emplace_back(threadId, std::move(record));
+  }
+}
+
+static void printRecord(const RecordT &r, bool verbose) {
+
+  if (verbose) {
+    fmt::print("\n>~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n");
+    fmt::print("{:<18} : {}\n", "Thread ID", r.first);
+    fmt::print("{:<18} : {}\n", "Call duration",
+               r.second.time_end() - r.second.time_start());
+    fmt::print("{:<18} : {}\n\n", "Captured outputs",
+               r.second.small_outputs().size() +
+                   r.second.mem_obj_outputs().size());
+  }
+  std::cout << "----> " << getAPIName(r.second.function_id()) << "(\n";
+  printArgs(r.second.args());
+  std::cout << ") : " << r.second.return_value() << "\n";
+
+  if (verbose) {
+    fmt::print("\n<~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n");
+  }
 }
 
 static void
@@ -256,20 +230,7 @@ void printTrace(const options &opts) {
     exit(-1);
   }
 
-  sycl::xpti_helpers::PiArgumentsHandler argHandler;
-
-#define _PI_API(api)                                                           \
-  argHandler.set##_##api(                                                      \
-      [](const pi_plugin &, std::optional<pi_result>, auto... Args) {          \
-        std::cout << "---> " << #api << "("                                    \
-                  << "\n";                                                     \
-        printArgs<sycl::detail::PiApiKind::api>(Args...);                      \
-        std::cout << ") ---> ";                                                \
-      });
-#include <CL/sycl/detail/pi.def>
-#undef _PI_API
-
-  std::vector<Record> records;
+  std::vector<RecordT> records;
 
   fmt::print("Binary images:\n\n");
   for (auto &de : std::filesystem::directory_iterator(opts.input())) {
@@ -279,35 +240,36 @@ void printTrace(const options &opts) {
   }
   fmt::print("------------------------------------------\n");
   for (auto &de : std::filesystem::directory_iterator(opts.input())) {
-    if (de.path().extension().string() == ".trace") {
+    if (de.path().extension().string() == kPiTraceExt) {
       parseTraceFile(records, de.path());
     }
   }
 
   std::map<uint32_t, PerformanceSummary> perfMap;
 
-  const auto collectPerf = [&perfMap](const Record &r) {
-    if (perfMap.count(r.functionId) == 0) {
-      perfMap[r.functionId] = PerformanceSummary{};
+  const auto collectPerf = [&perfMap](const RecordT &r) {
+    if (perfMap.count(r.second.function_id()) == 0) {
+      perfMap[r.second.function_id()] = PerformanceSummary{};
     }
-    PerformanceSummary &ps = perfMap[r.functionId];
+    PerformanceSummary &ps = perfMap[r.second.function_id()];
     ps.totalCalls++;
-    ps.totalDuration += r.end - r.start;
-    ps.maxDuration = std::max(ps.maxDuration, r.end - r.start);
-    ps.minDuration = std::min(ps.minDuration, r.end - r.start);
+    uint64_t duration = r.second.time_end() - r.second.time_start();
+    ps.totalDuration += duration;
+    ps.maxDuration = std::max(ps.maxDuration, duration);
+    ps.minDuration = std::min(ps.minDuration, duration);
   };
 
   if (opts.print_group() == options::print_group_by::thread) {
     std::string lastThread = "";
     for (auto &r : records) {
-      if (lastThread != r.threadId) {
+      if (lastThread != r.first) {
         if (!lastThread.empty()) {
           std::cout << "~END THREAD : " << lastThread << "\n\n";
         }
-        lastThread = r.threadId;
+        lastThread = r.first;
         std::cout << "~START THREAD : " << lastThread << "\n\n";
       }
-      printRecord(argHandler, r, opts.verbose());
+      printRecord(r, opts.verbose());
       collectPerf(r);
     }
     if (opts.performance_summary()) {
@@ -316,12 +278,13 @@ void printTrace(const options &opts) {
     perfMap.clear();
     std::cout << "~END THREAD : " << lastThread << "\n\n";
   } else {
-    std::sort(
-        records.begin(), records.end(),
-        [](const Record &a, const Record &b) { return a.start < b.start; });
+    std::sort(records.begin(), records.end(),
+              [](const RecordT &a, const RecordT &b) {
+                return a.second.time_start() < b.second.time_start();
+              });
     for (auto &r : records) {
-      std::cout << "THREAD : " << r.threadId << "\n";
-      printRecord(argHandler, r, opts.verbose());
+      std::cout << "THREAD : " << r.first << "\n";
+      printRecord(r, opts.verbose());
       collectPerf(r);
     }
     if (opts.performance_summary()) {
