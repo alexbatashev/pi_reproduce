@@ -6,6 +6,7 @@ set(DPCPP_TRACE_VERSION_PATCH 0)
 set(DPCPP_TRACE_VERSION "${DPCPP_TRACE_VERSION_MAJOR}.${DPCPP_TRACE_VERSION_MINOR}.${DPCPP_TRACE_VERSION_PATCH}")
 
 option(BUILD_DEBUGGER "Build dpcpp_trace debug server, client and plugins" OFF)
+option(DPCPP_TRACE_LINK_STATICALLY "Use static libraries" OFF)
 
 project(dpcpp_trace VERSION ${DPCPP_TRACE_VERSION})
 

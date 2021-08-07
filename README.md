@@ -19,6 +19,13 @@ Pre-built binaries are published to for every nightly release [here](https://git
 
 ## Build instructions
 
+**Prerequisites:**
+
+1. A modern C++20 capable compiler, like GCC 10.3
+2. git
+
+**Build instructions:**
+
 1. Download and build DPC++: https://intel.github.io/llvm-docs/GetStartedGuide.html#build-dpc-toolchain
 
 2. Download and build dpcpp_trace:
@@ -30,6 +37,11 @@ mkdir build && cd build
 cmake -DINTEL_LLVM_SOURCE_PATH=/path/to/intel/llvm/src/dir -DINTEL_LLVM_BINARY_PATH=/path/to/intel/llvm/build/dir -GNinja ..
 ninja
 ```
+
+**Available options:**
+
+- `DPCPP_TRACE_LINK_STATICALLY` - use static `libstdc++`. This is used in CI to
+  produce portable binaries.
 
 ## Basic usage
 
