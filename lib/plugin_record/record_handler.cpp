@@ -42,7 +42,7 @@ static void dumpBinaryDescriptor(pi_device_binary binary, pi_uint32 idx) {
     dump.set_link_options(binary->LinkOptions);
 
   for (auto it = binary->EntriesBegin; it != binary->EntriesEnd; ++it) {
-    auto entry = *dump.add_offload_entries();
+    auto &entry = *dump.add_offload_entries();
     entry.set_address((uint64_t)it->addr);
     entry.set_name(it->name);
     entry.set_size(it->size);
@@ -51,7 +51,7 @@ static void dumpBinaryDescriptor(pi_device_binary binary, pi_uint32 idx) {
 
   for (auto it = binary->PropertySetsBegin; it != binary->PropertySetsEnd;
        ++it) {
-    auto propSet = *dump.add_property_sets();
+    auto &propSet = *dump.add_property_sets();
     propSet.set_name(it->Name);
     for (auto p = it->PropertiesBegin; p != it->PropertiesEnd; ++p) {
       auto &prop = *propSet.add_properties();
@@ -200,8 +200,8 @@ void handleDevicesGet(std::ostream &os, const uint32_t &funcId,
 }
 
 void handleEnqueueMemBufferMap(
-    std::ostream &os, const uint64_t &eventId, const uint32_t &funcId,
-    const uint64_t &begin, const uint64_t &end, bool writeMemObj,
+    std::ostream &os, bool writeMemObj, const uint64_t &eventId, const uint32_t &funcId,
+    const uint64_t &begin, const uint64_t &end,
     const pi_plugin &Plugin, std::optional<pi_result> res,
     pi_queue command_queue, pi_mem buffer, pi_bool blocking_map,
     pi_map_flags map_flags, size_t offset, size_t size,
