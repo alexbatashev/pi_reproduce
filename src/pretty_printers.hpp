@@ -1,6 +1,8 @@
 #pragma once
 
 #include "api_call.pb.h"
+#include "utils.hpp"
+
 #include <CL/sycl/detail/pi.h>
 #include <CL/sycl/detail/pi.hpp>
 #include <cstdint>
@@ -170,12 +172,12 @@ inline void printArgs(
   for (const auto &arg : args) {
     if (arg.type() == dpcpp_trace::ArgData::INT32) {
       uint64_t valRaw = arg.int_val();
-      int64_t valBig = std::bit_cast<int64_t>(valRaw);
+      int64_t valBig = bit_cast<int64_t>(valRaw);
       int32_t val = static_cast<int32_t>(valBig);
       fmt::print("{:>20} : {}\n", "<unknown>", val);
     } else if (arg.type() == dpcpp_trace::ArgData::INT64) {
       uint64_t valRaw = arg.int_val();
-      int64_t val = std::bit_cast<int64_t>(valRaw);
+      int64_t val = bit_cast<int64_t>(valRaw);
       fmt::print("{:>20} : {}\n", "<unknown>", val);
     } else if (arg.type() == dpcpp_trace::ArgData::UINT32) {
       uint64_t valRaw = arg.int_val();

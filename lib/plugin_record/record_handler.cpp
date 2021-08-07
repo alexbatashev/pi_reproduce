@@ -2,6 +2,7 @@
 #include "constants.hpp"
 #include "record.pb.h"
 #include "write_utils.hpp"
+#include "utils.hpp"
 
 #include <atomic>
 #include <cstdint>
@@ -80,7 +81,7 @@ static void collectArgs(dpcpp_trace::APICall &call, T &&arg, Ts &&...rest) {
     savedArg.set_type(dpcpp_trace::ArgData::STRING);
     savedArg.set_str_val(arg);
   } else if constexpr (std::is_pointer_v<std::remove_reference_t<T>>) {
-    uint64_t ptr = std::bit_cast<uint64_t>(arg);
+    uint64_t ptr = bit_cast<uint64_t>(arg);
     savedArg.set_type(dpcpp_trace::ArgData::POINTER);
     savedArg.set_int_val(ptr);
   } else if constexpr (std::is_unsigned_v<T>) {
@@ -93,7 +94,7 @@ static void collectArgs(dpcpp_trace::APICall &call, T &&arg, Ts &&...rest) {
       savedArg.set_type(dpcpp_trace::ArgData::UINT64);
   } else {
     int64_t val = static_cast<int64_t>(arg);
-    savedArg.set_int_val(std::bit_cast<uint64_t>(val));
+    savedArg.set_int_val(bit_cast<uint64_t>(val));
 
     if (sizeof(T) == 4)
       savedArg.set_type(dpcpp_trace::ArgData::INT32);
