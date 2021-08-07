@@ -21,29 +21,14 @@ documentation.
 
 ### Binary trace file format
 
-Each `.trace` file is composed of PI call records. Each record has the
+Each `.pi_trace` file is composed of PI call records. Each record has the
 following format:
 ```
-uint32_t function_id -- as defined by PiApiKind enum
-uint8_t backend -- backend id, same as sycl::backend.
-uint64_t start -- call start timestamp in microseconds.
-uint64_t end -- call end timestamp in microseconds.
-size_t num_inputs -- number of recorded input arguments.
-size_t num_outputs -- number of recorded output arguments.
-size_t total_args_size -- number of bytes of recorded input bytes
---------
-<total_args_size bytes of raw data> -- arguments values
---------
--------- - repeated num_inputs times
-size_t input_size -- number of bytes of recorded data
-<input_size bytes of raw data> -- input data
---------
--------- - repeated num_outputs times
-size_t output_size -- number of bytes of recorded data
-<output_size bytes of raw data> -- output data
---------
-pi_result return_value -- the return value of API call
+uint32_t Size - record size in bytes
+<size bytes of data> - record data in Protobuf format
 ```
+
+Protobuf schema for PI API calls is described [here](https://github.com/alexbatashev/dpcpp_trace/blob/main/tools/schemas/api_call.proto).
 
 ### Handling string arguments
 

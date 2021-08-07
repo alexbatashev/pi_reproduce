@@ -48,8 +48,10 @@ static std::string funcIdToString(uint32_t funcId) {
 
 void dieIfUnexpected(uint32_t funcId, PiApiKind expected) {
   if (funcId != static_cast<uint32_t>(expected)) {
-    std::cerr << "Unexpected PI call: expected " << funcIdToString(funcId);
-    std::cerr << " got " << funcIdToString(static_cast<uint32_t>(expected));
+    std::cerr << "Unexpected PI call: got " << funcIdToString(funcId) << " ("
+              << funcId << ") ";
+    std::cerr << " expected "
+              << funcIdToString(static_cast<uint32_t>(expected));
     std::cerr << "\n";
     exit(-1);
   }

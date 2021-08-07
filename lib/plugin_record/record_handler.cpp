@@ -1,6 +1,7 @@
 #include "record_handler.hpp"
-#include "constants.hpp"
 #include "api_call.pb.h"
+#include "constants.hpp"
+#include "device_binary.pb.h"
 #include "utils.hpp"
 #include "write_utils.hpp"
 
@@ -29,48 +30,43 @@ static void dumpBinaryDescriptor(pi_device_binary binary, pi_uint32 idx) {
 
   std::ofstream os{path, std::ios::binary};
 
-  const auto writeInt = [&os](const auto num) {
-    os.write(reinterpret_cast<const char *>(&num), sizeof(num));
-  };
-
-  const auto writeString = [&os, &writeInt](const char *str) {
-    size_t length = strlen(str) + 1;
-    writeInt(length);
-    os.write(str, length);
-  };
-
-  writeInt(binary->Version);
-  writeInt(binary->Kind);
-  writeInt(binary->Format);
-  writeString(binary->DeviceTargetSpec);
-  writeString(binary->CompileOptions);
-  writeString(binary->LinkOptions);
-  size_t numOffloadEntries =
-      std::distance(binary->EntriesBegin, binary->EntriesEnd);
-  writeInt(numOffloadEntries);
+  dpcpp_trace::DeviceBinary dump;
+  dump.set_version(binary->Version);
+  dump.set_kind(binary->Kind);
+  dump.set_format(binary->Format);
+  dump.set_device_target_spec(binary->DeviceTargetSpec);
+  dump.set_compile_options(binary->CompileOptions);
+  dump.set_link_options(binary->LinkOptions);
 
   for (auto it = binary->EntriesBegin; it != binary->EntriesEnd; ++it) {
-    writeInt(reinterpret_cast<size_t>(it->addr));
-    writeString(it->name);
-    writeInt(static_cast<size_t>(it->size));
+    auto entry = *dump.add_offload_entries();
+    entry.set_address((uint64_t)it->addr);
+    entry.set_name(it->name);
+    entry.set_size(it->size);
+    entry.set_flags(it->flags);
   }
 
-  size_t numPropSets =
-      std::distance(binary->PropertySetsBegin, binary->PropertySetsEnd);
-  writeInt(numPropSets);
   for (auto it = binary->PropertySetsBegin; it != binary->PropertySetsEnd;
        ++it) {
-    writeString(it->Name);
-    size_t numProperties =
-        std::distance(it->PropertiesBegin, it->PropertiesEnd);
-    writeInt(numProperties);
+    auto propSet = *dump.add_property_sets();
+    propSet.set_name(it->Name);
     for (auto p = it->PropertiesBegin; p != it->PropertiesEnd; ++p) {
-      writeString(p->Name);
-      writeInt(reinterpret_cast<size_t>(p->ValAddr));
-      writeInt(p->Type);
-      writeInt(static_cast<size_t>(p->ValSize));
+      auto &prop = *propSet.add_properties();
+      prop.set_name(p->Name);
+      prop.set_type(static_cast<dpcpp_trace::Property::PropertyType>(p->Type));
+      prop.set_data(static_cast<char *>(p->ValAddr), p->ValSize);
     }
   }
+
+  dump.set_manifest(binary->ManifestStart,
+                    std::distance(binary->ManifestStart, binary->ManifestEnd));
+
+  uint64_t size;
+  std::string out;
+  dump.SerializeToString(&out);
+  size = out.size();
+  os.write(reinterpret_cast<char *>(&size), sizeof(uint64_t));
+  os.write(out.data(), size);
   os.close();
 }
 
@@ -415,8 +411,8 @@ RecordHandler::RecordHandler(
 
   const auto wrapMem = [this](auto func) {
     return [this, func](auto &&...args) {
-      std::invoke(func, *mOS, mLastEventId, mLastFunctionId, mTimestampBegin,
-                  mTimestampEnd, mSkipMemObjects, args...);
+      std::invoke(func, *mOS, mSkipMemObjects, mLastEventId, mLastFunctionId,
+                  mTimestampBegin, mTimestampEnd, args...);
     };
   };
 

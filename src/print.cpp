@@ -1,5 +1,6 @@
 #include "common.hpp"
 #include "constants.hpp"
+#include "device_binary.pb.h"
 #include "options.hpp"
 #include "pretty_printers.hpp"
 
@@ -104,24 +105,20 @@ printPerformanceSummary(std::map<uint32_t, PerformanceSummary> &perfMap) {
 
 void printImageDesc(std::filesystem::path path) {
   std::ifstream is{path, std::ios::binary};
+  uint64_t size;
+  is.read(reinterpret_cast<char *>(&size), sizeof(uint64_t));
+  std::string rawImg;
+  rawImg.resize(size + 1);
+  is.read(rawImg.data(), size);
 
-  const auto readInt = [&is](auto &num) {
-    is.read(reinterpret_cast<char *>(&num),
-            sizeof(std::decay_t<decltype(num)>));
-  };
+  dpcpp_trace::DeviceBinary binary;
+  binary.ParseFromString(rawImg);
 
   fmt::print("Image desc: {}\n", path.string());
+  fmt::print("Version: {}\n", binary.version());
+  fmt::print("Kind: {}\n", binary.kind());
 
-  uint16_t version;
-  readInt(version);
-  fmt::print("Version: {}\n", version);
-
-  uint8_t kind;
-  readInt(kind);
-  fmt::print("Kind: {}\n", kind);
-
-  uint8_t format;
-  readInt(format);
+  uint8_t format = static_cast<uint8_t>(binary.format());
   if (format == PI_DEVICE_BINARY_TYPE_SPIRV)
     fmt::print("Format: SPIR-V\n");
   else if (format == PI_DEVICE_BINARY_TYPE_NATIVE)
@@ -131,90 +128,38 @@ void printImageDesc(std::filesystem::path path) {
   else if (format == PI_DEVICE_BINARY_TYPE_NONE)
     fmt::print("Format: None\n");
 
-  std::array<char, 8192> buf;
-  size_t length;
+  fmt::print("Device target: {}\n", binary.device_target_spec());
+  fmt::print("Compile options: {}\n", binary.compile_options());
+  fmt::print("Link options: {}\n", binary.link_options());
 
-  readInt(length);
-  is.read(buf.data(), length);
-
-  fmt::print("Device target: {}\n", std::string_view(buf.data(), length - 1));
-
-  readInt(length);
-  is.read(buf.data(), length);
-
-  fmt::print("Compile options: {}\n", std::string_view(buf.data(), length - 1));
-
-  readInt(length);
-  is.read(buf.data(), length);
-
-  fmt::print("Link options: {}\n", std::string_view(buf.data(), length - 1));
-
-  size_t numOffloadEntries;
-  readInt(numOffloadEntries);
-
-  fmt::print("Offload entries [{}]:\n", numOffloadEntries);
-  for (size_t i = 0; i < numOffloadEntries; i++) {
-    size_t addr;
-    readInt(addr);
-    fmt::print("{:>5}Address: {}\n", " ", addr);
-
-    readInt(length);
-    is.read(buf.data(), length);
-
-    fmt::print("{:>5}Name: {}\n", " ",
-               std::string_view(buf.data(), length - 1));
-
-    size_t size;
-    readInt(size);
-    fmt::print("{:>5}Size: {}\n\n", " ", size);
+  fmt::print("Offload entries [{}]:\n", binary.offload_entries().size());
+  for (const auto &entry : binary.offload_entries()) {
+    fmt::print("{:>5}Address: {}\n", " ", entry.address());
+    fmt::print("{:>5}Name: {}\n", " ", entry.name());
+    fmt::print("{:>5}Size: {}\n", " ", entry.size());
   }
 
-  size_t numPropSets;
-  readInt(numPropSets);
-  fmt::print("Property sets [{}]:\n", numPropSets);
-  for (size_t i = 0; i < numPropSets; ++i) {
-    readInt(length);
-    is.read(buf.data(), length);
-
-    fmt::print("{:>5}Name: {}\n", " ",
-               std::string_view(buf.data(), length - 1));
-
-    size_t numProperties;
-    readInt(numProperties);
-    fmt::print("{:>5}Properties [{}]:\n", " ", numProperties);
-
-    for (size_t j = 0; j < numProperties; j++) {
-      readInt(length);
-      is.read(buf.data(), length);
-
-      fmt::print("{:>10}Name: {}\n", " ",
-                 std::string_view(buf.data(), length - 1));
-
-      size_t valAddr;
-      readInt(valAddr);
-
-      fmt::print("{:>10}Value address: {}\n", " ", valAddr);
-
-      int type;
-      readInt(type);
-      switch (static_cast<pi_property_type>(type)) {
-      case PI_PROPERTY_TYPE_UNKNOWN:
-        fmt::print("{:>10}Type: unknown\n", " ");
-        break;
-      case PI_PROPERTY_TYPE_UINT32:
-        fmt::print("{:>10}Type: uint32\n", " ");
-        break;
-      case PI_PROPERTY_TYPE_BYTE_ARRAY:
-        fmt::print("{:>10}Type: byte array\n", " ");
-        break;
-      case PI_PROPERTY_TYPE_STRING:
-        fmt::print("{:>10}Type: string\n", " ");
-        break;
+  fmt::print("Property sets [{}]:\n", binary.property_sets().size());
+  for (const auto &propSet : binary.property_sets()) {
+    fmt::print("{:>5}Name: {}\n", " ", propSet.name());
+    fmt::print("{:>5}Properties [{}]:\n", " ", propSet.properties().size());
+    for (const auto &prop : propSet.properties()) {
+      fmt::print("{:>10}Name: {}\n", " ", prop.name());
+      fmt::print("{:>10}Size: {}\n", " ", prop.data().size());
+      uint32_t type = prop.type();
+      if (static_cast<pi_property_type>(type) == PI_PROPERTY_TYPE_UNKNOWN) {
+        fmt::print("{:>10}Type: {}\n", " ", "UNKNOWN");
+      } else if (static_cast<pi_property_type>(type) ==
+                 PI_PROPERTY_TYPE_UINT32) {
+        fmt::print("{:>10}Type: {}\n", " ", "uint32");
+      } else if (static_cast<pi_property_type>(type) ==
+                 PI_PROPERTY_TYPE_BYTE_ARRAY) {
+        fmt::print("{:>10}Type: {}\n", " ", "byte array");
+      } else if (static_cast<pi_property_type>(type) ==
+                 PI_PROPERTY_TYPE_STRING) {
+        fmt::print("{:>10}Type: {}\n", " ", "string");
+        fmt::print("{:>10}Value: {}\n", " ", prop.data());
       }
-
-      size_t size;
-      readInt(size);
-      fmt::print("{:>10}Value size: {}\n", " ", size);
     }
   }
   fmt::print("\n");

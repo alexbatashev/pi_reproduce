@@ -44,6 +44,12 @@ void record(const options &opts) {
     std::terminate();
   }
 
+  if (!std::filesystem::create_directory(opts.output() / kBuffersPath)) {
+    std::cerr << "Failed to create directory " << opts.output() / kBuffersPath
+              << "\n";
+    exit(EXIT_FAILURE);
+  }
+
   std::ofstream envFile{opts.output() / "env"};
   for (auto entry : opts.env()) {
     envFile << entry << "\n";
