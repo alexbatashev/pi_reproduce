@@ -6,7 +6,7 @@
 // RUN: ls -l %t_record | grep "graph.json"
 // RUN: ls -l %t_record | grep "env"
 // RUN: ls -l %t_record | grep "replay_config.json"
-// RUN: ls -l %t_record | grep "main.trace"
+// RUN: ls -l %t_record | grep "main.pi_trace"
 // RUN: ls -l %t_record | grep "files_config.json"
 
 #include <sycl/sycl.hpp>

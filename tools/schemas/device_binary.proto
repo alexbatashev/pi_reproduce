@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package dpcpp_trace;
+
+message OffloadEntry {
+  uint64 address = 1;
+  string name = 2;
+  uint64 size = 3;
+  int32 flags = 4;
+}
+
+message Property {
+  string name = 1;
+  enum PropertyType {
+    UNKNOWN = 0;
+    UINT32 = 1;
+    BYTE_ARRAY = 2;
+    STRING = 3;
+  }
+  PropertyType type = 2;
+  bytes data = 3;
+}
+
+message PropertySet {
+  string name = 1;
+  repeated Property properties = 2;
+}
+
+message DeviceBinary {
+  uint32 version = 1;
+  uint32 kind = 2;
+  uint32 format = 3;
+  string device_target_spec = 4;
+  string compile_options = 5;
+  string link_options = 6;
+  repeated OffloadEntry offload_entries = 7;
+  repeated PropertySet property_sets = 8;
+  bytes manifest = 9;
+}

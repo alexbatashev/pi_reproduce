@@ -14,17 +14,20 @@ public:
                 std::chrono::time_point<std::chrono::steady_clock> timestamp,
                 bool skipMemObjects);
 
-  void handle(uint32_t funcId, const pi_plugin &plugin,
+  void handle(uint64_t eventId, uint32_t funcId, const pi_plugin &plugin,
               std::optional<pi_result> result, void *data);
   void flush();
 
-  void timestamp();
-
-  void writeHeader(uint32_t funcId);
+  void timestamp_begin();
+  void timestamp_end();
 
 private:
   sycl::xpti_helpers::PiArgumentsHandler mArgHandler;
   std::unique_ptr<std::ostream> mOS;
   std::chrono::time_point<std::chrono::steady_clock> mStartTime;
+  uint64_t mLastEventId;
+  uint32_t mLastFunctionId;
+  uint64_t mTimestampBegin;
+  uint64_t mTimestampEnd;
   bool mSkipMemObjects;
 };

@@ -23,7 +23,6 @@ static uint8_t GStreamID = 0;
 thread_local RecordHandler *GRecordHandler;
 
 std::chrono::time_point<std::chrono::steady_clock> GStartTime;
-
 static bool shouldSkipMemObjects() {
   static bool res = getenv(kSkipMemObjsEnvVar) != nullptr;
   return res;
@@ -79,7 +78,7 @@ XPTI_CALLBACK_API void tpCallback(uint16_t TraceType,
       std::array<char, 1024> buf;
       pthread_getname_np(pthread_self(), buf.data(), buf.size());
       std::string filename{buf.data()};
-      filename += ".trace";
+      filename += kPiTraceExt;
       auto fs = std::make_unique<std::ofstream>(
           outDir / filename, std::ios::out | std::ios::app | std::ios::binary);
       GRecordHandler =
@@ -91,19 +90,19 @@ XPTI_CALLBACK_API void tpCallback(uint16_t TraceType,
           static_cast<const xpti::function_with_args_t *>(UserData);
       const auto *Plugin = static_cast<pi_plugin *>(Data->user_data);
 
-      GRecordHandler->writeHeader(Data->function_id);
-      GRecordHandler->timestamp();
+      GRecordHandler->timestamp_begin();
     }
   } else if (Type == xpti::trace_point_type_t::function_with_args_end &&
              GRecordHandler) {
-    GRecordHandler->timestamp();
+    GRecordHandler->timestamp_end();
 
     const auto *Data =
         static_cast<const xpti::function_with_args_t *>(UserData);
 
     const auto *Plugin = static_cast<pi_plugin *>(Data->user_data);
     const pi_result Result = *static_cast<pi_result *>(Data->ret_data);
-    GRecordHandler->handle(Data->function_id, *Plugin, Result, Data->args_data);
+    GRecordHandler->handle(Instance, Data->function_id, *Plugin, Result,
+                           Data->args_data);
 
     GRecordHandler->flush();
   }
