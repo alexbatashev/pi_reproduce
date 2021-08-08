@@ -7,7 +7,7 @@
 
 class options {
 public:
-  enum class mode { record, replay, print, info, pack, debug };
+  enum class mode { record, replay, print, info, pack, unpack, debug };
   enum class print_group_by { none, thread };
 
   options(int argc, char *argv[], char *env[]);

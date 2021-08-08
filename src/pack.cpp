@@ -77,25 +77,27 @@ void pack(const options &opts) {
   replayConfigOut.close();
 
   if (!opts.output().empty()) {
-    std::ofstream os{opts.output()};
+    std::ofstream os{opts.output(), std::ios::binary};
     char version = 0;
     os.write(&version, sizeof(char));
 
     auto codec = folly::io::getCodec(folly::io::CodecType::ZSTD);
 
     for (auto &p : fs::recursive_directory_iterator(opts.input())) {
+      std::cout << "compressing " << p << "\n";
       auto rel = fs::relative(p, opts.input());
       std::string pathStr = rel.string();
-      if (fs::is_directory(rel)) {
+      if (fs::is_directory(p)) {
         char kind = 0;
         os.write(&kind, sizeof(char));
         os.write(pathStr.data(), pathStr.size());
-      } else if (fs::is_regular_file(rel)) {
+      } else if (fs::is_regular_file(p)) {
+        std::cout << "FILE \n";
         char kind = 1;
         os.write(&kind, sizeof(char));
         os.write(pathStr.data(), pathStr.size());
 
-        folly::MemoryMapping mapping{pathStr.c_str()};
+        folly::MemoryMapping mapping{p.path().c_str()};
         auto outBuf = folly::IOBuf::wrapBufferAsValue(mapping.range());
         auto compressedBuf = codec->compress(&outBuf);
 
@@ -104,5 +106,6 @@ void pack(const options &opts) {
         os.write(reinterpret_cast<const char *>(compressedBuf->data()), length);
       }
     }
+    os.close();
   }
 }
