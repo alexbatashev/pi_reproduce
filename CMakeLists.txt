@@ -37,6 +37,9 @@ endif()
 
 add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/fmt ${PROJECT_BINARY_DIR}/fmt)
 
+if (DPCPP_TRACE_LINK_STATICALLY)
+  set(Protobuf_USE_STATIC_LIBS ON)
+endif()
 find_package(Protobuf REQUIRED)
 
 include(AddDPCPPTrace)
