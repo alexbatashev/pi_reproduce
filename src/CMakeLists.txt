@@ -1,16 +1,8 @@
-add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/fmt ${PROJECT_BINARY_DIR}/fmt)
-
 if (BUILD_DEBUGGER)
   add_subdirectory(debug_server)
 endif()
 
 configure_file(config.hpp.in ${PROJECT_BINARY_DIR}/include/config.hpp)
-
-add_dpcpp_trace_library(utils STATIC
-  options.cpp
-  utils.cpp
-  trace.cpp
-)
 
 add_dpcpp_trace_executable(dpcpp_trace
   record.cpp
@@ -18,7 +10,7 @@ add_dpcpp_trace_executable(dpcpp_trace
   print.cpp
   main.cpp
   pack.cpp
-  utils.cpp
+  unpack.cpp
   $<$<BOOL:${BUILD_DEBUGGER}>:debug.cpp>
 )
 

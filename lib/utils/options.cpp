@@ -24,7 +24,9 @@ void options::parseRecordOptions(int argc, char *argv[]) {
     if (opt[0] != '-' && mInput.empty()) {
       mInput = opt;
     } else if (opt == "--") {
-      hasExtraOpts = true; i++; break;
+      hasExtraOpts = true;
+      i++;
+      break;
     } else if ((opt == "--output" || opt == "-o") && mOutput.empty()) {
       if (i + 1 >= argc) {
         throw std::runtime_error("--output requires an argument\n");
@@ -38,7 +40,8 @@ void options::parseRecordOptions(int argc, char *argv[]) {
     } else if (opt == "--no-fork" && !mNoFork) {
       mNoFork = true;
     } else {
-      throw std::runtime_error(std::string("unrecognized option ") + std::string(argv[i]));
+      throw std::runtime_error(std::string("unrecognized option ") +
+                               std::string(argv[i]));
     }
 
     i++;
@@ -138,12 +141,49 @@ void options::parsePrintOptions(int argc, char *argv[]) {
 }
 
 void options::parsePackOptions(int argc, char *argv[]) {
-  if (argc != 3) {
-    std::cerr << "pack accepts only one option\n";
+  if (argc <= 2) {
+    std::cerr << "pack requires arguments\n";
     exit(EXIT_FAILURE);
   }
 
-  mInput = argv[2];
+  int i = 2;
+  while (i < argc) {
+    std::string_view opt{argv[i]};
+    if (opt[0] != '-') {
+      mInput = opt;
+    } else if (opt == "--output" || opt == "-o") {
+      if (i + 1 >= argc) {
+        std::cerr << opt << " requires an argument\n";
+        std::terminate();
+      }
+      mOutput = argv[++i];
+    }
+
+    i++;
+  }
+}
+
+void options::parseUnpackOptions(int argc, char *argv[]) {
+  if (argc <= 2) {
+    std::cerr << "unpack requires arguments\n";
+    exit(EXIT_FAILURE);
+  }
+
+  int i = 2;
+  while (i < argc) {
+    std::string_view opt{argv[i]};
+    if (opt[0] != '-') {
+      mInput = opt;
+    } else if (opt == "--output" || opt == "-o") {
+      if (i + 1 >= argc) {
+        std::cerr << opt << " requires an argument\n";
+        std::terminate();
+      }
+      mOutput = argv[++i];
+    }
+
+    i++;
+  }
 }
 
 void options::parseDebugOptions(int argc, char *argv[]) {
@@ -191,6 +231,9 @@ options::options(int argc, char *argv[], char *env[]) {
   } else if (command == "pack") {
     mMode = mode::pack;
     parsePackOptions(argc, argv);
+  } else if (command == "unpack") {
+    mMode = mode::unpack;
+    parseUnpackOptions(argc, argv);
   } else if (command == "debug") {
     mMode = mode::debug;
     parseDebugOptions(argc, argv);

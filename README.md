@@ -24,6 +24,7 @@ Pre-built binaries are published to for every nightly release [here](https://git
 1. A modern C++20 capable compiler, like GCC 10.3
 2. git
 3. [Google Protobuf](https://developers.google.com/protocol-buffers)
+3. [zstd](https://facebook.github.io/zstd/)
 
 **Build instructions:**
 

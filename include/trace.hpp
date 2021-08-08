@@ -53,9 +53,8 @@ private:
   std::function<void(const std::string &, const OpenHandler &)>
       mFileOpenHandler =
           [](const std::string &, const OpenHandler &h) { h.execute(); };
-  std::function<void(const std::string &, const StatHandler &)>
-      mStatHandler =
-          [](const std::string &, const StatHandler &h) { h.execute(); };
+  std::function<void(const std::string &, const StatHandler &)> mStatHandler =
+      [](const std::string &, const StatHandler &h) { h.execute(); };
   pid mPid;
 };
 

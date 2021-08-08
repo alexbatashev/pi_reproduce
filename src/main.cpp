@@ -49,7 +49,13 @@ Available commands:
                    print command, that is going to be executed.
 
 - pack:
-    Usage: dpcpp_trace pack /path/to/trace
+    Usages:
+      dpcpp_trace pack /path/to/trace
+      dpcpp_trace pack /path/to/trace -o my_trace.dpcpp_trace
+
+    Options:
+      --output, -o creates compressed trace file in addition to packing
+                   reproducer; optional.
 )___";
 
 static void printInfo() { fmt::print(infoText); }
@@ -68,6 +74,8 @@ int main(int argc, char *argv[], char *env[]) {
       replay(opts);
     } else if (opts.command() == options::mode::pack) {
       pack(opts);
+    } else if (opts.command() == options::mode::unpack) {
+      unpack(opts);
     } else if (opts.command() == options::mode::debug) {
       if constexpr (kHasDebugger) {
         debug(opts);

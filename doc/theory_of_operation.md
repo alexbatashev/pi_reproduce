@@ -91,6 +91,21 @@ copy application executable and its dependencies into trace directory. A special
 files and their packed versions. On Linux, paths, that start with `/dev`,
 `/sys`, or `/proc` are skipped.
 
+### Compression
+`dpcpp_trace` uses [zstd](https://facebook.github.io/zstd/) for compression
+algorithm. The following schema describes the contents of compressed files:
+
+```
+uint8_t version -- compression algorithm version
+<<< repeated >>>
+uint8_t kind -- record kind: 0 for directory, 1 for file
+uint64_t size -- size of the file (or direcrory) name
+char filename[size] -- file name
+<<< files only >>>
+uint64_t length -- length of compressed file data
+char data[length] -- compressed file
+```
+
 ### Replaying
 When `dpcpp_trace replay` is invoked, the tool checks for `replay_file_map.json`
 file and sets up hooks for system calls. If the original file is found in the
