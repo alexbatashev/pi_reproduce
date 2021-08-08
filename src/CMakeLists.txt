@@ -4,19 +4,13 @@ endif()
 
 configure_file(config.hpp.in ${PROJECT_BINARY_DIR}/include/config.hpp)
 
-add_dpcpp_trace_library(utils STATIC
-  options.cpp
-  utils.cpp
-  trace.cpp
-)
-
 add_dpcpp_trace_executable(dpcpp_trace
   record.cpp
   replay.cpp
   print.cpp
   main.cpp
   pack.cpp
-  utils.cpp
+  unpack.cpp
   $<$<BOOL:${BUILD_DEBUGGER}>:debug.cpp>
 )
 
@@ -31,8 +25,6 @@ target_link_libraries(dpcpp_trace PRIVATE
   fmt
   nlohmann_json::nlohmann_json
   trace_proto
-  Folly::folly
-  # ZLIB::ZLIB
 )
 
 target_include_directories(dpcpp_trace PRIVATE

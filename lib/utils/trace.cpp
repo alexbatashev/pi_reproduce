@@ -50,11 +50,12 @@ static std::string readString(pid pid, std::uintptr_t addr) {
   return result;
 }
 
-static void writeString(pid pid, std::uintptr_t addr, std::uintptr_t reg, std::string_view str) {
+static void writeString(pid pid, std::uintptr_t addr, std::uintptr_t reg,
+                        std::string_view str) {
   char *stackAddr, *fileAddr;
 
-  stackAddr = reinterpret_cast<char *>(ptrace(
-      PTRACE_PEEKUSER, pid.get_native(), sizeof(long) * addr, nullptr));
+  stackAddr = reinterpret_cast<char *>(
+      ptrace(PTRACE_PEEKUSER, pid.get_native(), sizeof(long) * addr, nullptr));
   stackAddr -= 128 + PATH_MAX;
 
   fileAddr = stackAddr;
@@ -68,8 +69,7 @@ static void writeString(pid pid, std::uintptr_t addr, std::uintptr_t reg, std::s
     };
 
     pokeData data;
-    for (size_t i = 0; i < sizeof(long), i + offset <= str.size();
-         i++) {
+    for (size_t i = 0; i < sizeof(long), i + offset <= str.size(); i++) {
       if (i + offset == str.size()) [[unlikely]] {
         data.buf[i] = '\0';
       } else {
@@ -81,8 +81,7 @@ static void writeString(pid pid, std::uintptr_t addr, std::uintptr_t reg, std::s
     stackAddr += sizeof(long);
   }
 
-  ptrace(PTRACE_POKEUSER, pid.get_native(), sizeof(long) * reg,
-         fileAddr);
+  ptrace(PTRACE_POKEUSER, pid.get_native(), sizeof(long) * reg, fileAddr);
 }
 
 void OpenHandler::execute() const {

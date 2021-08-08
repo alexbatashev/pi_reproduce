@@ -74,6 +74,8 @@ int main(int argc, char *argv[], char *env[]) {
       replay(opts);
     } else if (opts.command() == options::mode::pack) {
       pack(opts);
+    } else if (opts.command() == options::mode::unpack) {
+      unpack(opts);
     } else if (opts.command() == options::mode::debug) {
       if constexpr (kHasDebugger) {
         debug(opts);
