@@ -35,7 +35,11 @@ if(NOT json_POPULATED)
   add_subdirectory(${json_SOURCE_DIR} ${json_BINARY_DIR} EXCLUDE_FROM_ALL)
 endif()
 
+add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/fmt ${PROJECT_BINARY_DIR}/fmt)
+
 find_package(Protobuf REQUIRED)
+find_package(folly REQUIRED)
+find_package(ZLIB REQUIRED)
 
 include(AddDPCPPTrace)
 

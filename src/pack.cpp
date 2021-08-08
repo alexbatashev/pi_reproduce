@@ -3,12 +3,16 @@
 
 #include <cstdlib>
 #include <filesystem>
+#include <folly/compression/Compression.h>
+#include <folly/io/IOBuf.h>
+#include <folly/system/MemoryMapping.h>
 #include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include <string>
 
 using json = nlohmann::json;
+namespace fs = std::filesystem;
 
 void pack(const options &opts) {
   if (!std::filesystem::exists(opts.input())) {
@@ -71,4 +75,34 @@ void pack(const options &opts) {
   std::ofstream replayConfigOut{opts.input() / kReplayConfigName};
   replayConfigOut << replayConfig.dump(4);
   replayConfigOut.close();
+
+  if (!opts.output().empty()) {
+    std::ofstream os{opts.output()};
+    char version = 0;
+    os.write(&version, sizeof(char));
+
+    auto codec = folly::io::getCodec(folly::io::CodecType::ZSTD);
+
+    for (auto &p : fs::recursive_directory_iterator(opts.input())) {
+      auto rel = fs::relative(p, opts.input());
+      std::string pathStr = rel.string();
+      if (fs::is_directory(rel)) {
+        char kind = 0;
+        os.write(&kind, sizeof(char));
+        os.write(pathStr.data(), pathStr.size());
+      } else if (fs::is_regular_file(rel)) {
+        char kind = 1;
+        os.write(&kind, sizeof(char));
+        os.write(pathStr.data(), pathStr.size());
+
+        folly::MemoryMapping mapping{pathStr.c_str()};
+        auto outBuf = folly::IOBuf::wrapBufferAsValue(mapping.range());
+        auto compressedBuf = codec->compress(&outBuf);
+
+        uint64_t length = compressedBuf->length();
+        os.write(reinterpret_cast<char *>(&length), sizeof(uint64_t));
+        os.write(reinterpret_cast<const char *>(compressedBuf->data()), length);
+      }
+    }
+  }
 }

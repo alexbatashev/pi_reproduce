@@ -1,5 +1,3 @@
-add_subdirectory(${PROJECT_SOURCE_DIR}/third_party/fmt ${PROJECT_BINARY_DIR}/fmt)
-
 if (BUILD_DEBUGGER)
   add_subdirectory(debug_server)
 endif()
@@ -33,6 +31,8 @@ target_link_libraries(dpcpp_trace PRIVATE
   fmt
   nlohmann_json::nlohmann_json
   trace_proto
+  Folly::folly
+  # ZLIB::ZLIB
 )
 
 target_include_directories(dpcpp_trace PRIVATE

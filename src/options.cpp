@@ -138,12 +138,26 @@ void options::parsePrintOptions(int argc, char *argv[]) {
 }
 
 void options::parsePackOptions(int argc, char *argv[]) {
-  if (argc != 3) {
-    std::cerr << "pack accepts only one option\n";
+  if (argc <= 2) {
+    std::cerr << "pack requires arguments\n";
     exit(EXIT_FAILURE);
   }
 
-  mInput = argv[2];
+  int i = 2;
+  while (i < argc) {
+    std::string_view opt{argv[i]};
+    if (opt[0] != '-') {
+      mInput = opt;
+    } else if (opt == "--output" || opt == "-o") {
+      if (i + 1 >= argc) {
+        std::cerr << opt << " requires an argument\n";
+        std::terminate();
+      }
+      mOutput = argv[++i];
+    }
+
+    i++;
+  }
 }
 
 void options::parseDebugOptions(int argc, char *argv[]) {

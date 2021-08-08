@@ -49,7 +49,13 @@ Available commands:
                    print command, that is going to be executed.
 
 - pack:
-    Usage: dpcpp_trace pack /path/to/trace
+    Usages:
+      dpcpp_trace pack /path/to/trace
+      dpcpp_trace pack /path/to/trace -o my_trace.dpcpp_trace
+
+    Options:
+      --output, -o creates compressed trace file in addition to packing
+                   reproducer; optional.
 )___";
 
 static void printInfo() { fmt::print(infoText); }
