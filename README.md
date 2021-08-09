@@ -23,8 +23,7 @@ Pre-built binaries are published to for every nightly release [here](https://git
 
 1. A modern C++20 capable compiler, like GCC 10.3
 2. git
-3. [Google Protobuf](https://developers.google.com/protocol-buffers)
-3. [zstd](https://facebook.github.io/zstd/)
+3. [conan](https://conan.io)
 
 **Build instructions:**
 
@@ -36,6 +35,7 @@ Pre-built binaries are published to for every nightly release [here](https://git
 git clone --recursive https://github.com/alexbatashev/dpcpp_trace.git
 cd dpcpp_trace
 mkdir build && cd build
+conan install -s compiler.libcxx=libstdc++11 ..
 cmake -DINTEL_LLVM_SOURCE_PATH=/path/to/intel/llvm/src/dir -DINTEL_LLVM_BINARY_PATH=/path/to/intel/llvm/build/dir -GNinja ..
 ninja
 ```

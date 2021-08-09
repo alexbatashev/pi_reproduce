@@ -26,13 +26,13 @@ jobs:
       - name: Install dependencies
         run: |
           echo 'APT::Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries
-          apt update && apt install -yqq libzstd-dev protobuf-compiler wget python3-pip ocl-icd-opencl-dev
+          apt update && apt install -yqq wget python3-pip
           wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB -O - | apt-key add -
           echo "deb https://apt.repos.intel.com/oneapi all main" | tee /etc/apt/sources.list.d/oneAPI.list
           rm -rf /var/lib/apt/lists/*
           apt update
           apt install -yqq intel-oneapi-runtime-opencl
-          pip3 install lit filecheck psutil
+          pip3 install lit filecheck psutil conan
       - name: Build & test
         run: |
           mkdir build
@@ -41,6 +41,7 @@ jobs:
           export LIT_ARGS="-vv;--timeout;100"
           export OCL_ICD_VENDORS=/opt/intel/oneapi/lib/etc/
           export LD_LIBRARY_PATH=/opt/intel/oneapi/lib/intel64/:/src/llvm_install/lib:$LD_LIBRARY_PATH
+          conan install -s compiler.libcxx=libstdc++11 ../
           cmake -DINTEL_LLVM_SOURCE_PATH=/src/llvm -DINTEL_LLVM_BINARY_PATH=/src/llvm_install -GNinja -DCMAKE_BUILD_TYPE=Release -DDPCPP_TRACE_LINK_STATICALLY=ON -DCMAKE_INSTALL_PREFIX=${{ github.workspace }}/install ..
           ninja
           ninja check-dpcpp_trace

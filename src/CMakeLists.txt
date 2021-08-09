@@ -22,8 +22,8 @@ target_link_libraries(dpcpp_trace PRIVATE
   utils
   -ldl
   -lpthread
-  fmt
-  nlohmann_json::nlohmann_json
+  CONAN_PKG::fmt
+  CONAN_PKG::nlohmann_json
   trace_proto
 )
 
