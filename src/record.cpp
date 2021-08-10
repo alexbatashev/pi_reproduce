@@ -2,7 +2,6 @@
 #include "constants.hpp"
 #include "fork.hpp"
 #include "utils/Tracer.hpp"
-// #include "trace.hpp"
 #include "utils.hpp"
 
 #include <cstdlib>

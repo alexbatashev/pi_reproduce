@@ -1,7 +1,6 @@
 #include "common.hpp"
 #include "constants.hpp"
 #include "fork.hpp"
-// #include "trace.hpp"
 #include "utils.hpp"
 #include "utils/Tracer.hpp"
 
