@@ -1,7 +1,8 @@
 #include "common.hpp"
 #include "constants.hpp"
 #include "fork.hpp"
-#include "trace.hpp"
+#include "utils/Tracer.hpp"
+// #include "trace.hpp"
 #include "utils.hpp"
 
 #include <cstdlib>
@@ -117,20 +118,17 @@ void record(const options &opts) {
     env.push_back(skipVal);
   }
 
-  Tracer tracer;
+  dpcpp_trace::NativeTracer tracer;
 
   json files;
 
   tracer.onFileOpen(
-      [&files](const std::string &fileName, const OpenHandler &h) {
+      [&files](std::string_view fileName, const dpcpp_trace::OpenHandler &h) {
         files.push_back(fileName);
-        h.execute();
       });
 
-  exit_code c = exec(executable, execArgs, env, tracer);
-
-  if (c != exit_code::success)
-    std::cerr << "Application finished with errors\n";
+  // exit_code c = exec(executable, execArgs, env, tracer);
+  tracer.launch(executable, execArgs, env);
 
   std::ofstream filesOut{opts.output() / kFilesConfigName};
   filesOut << files.dump(4);

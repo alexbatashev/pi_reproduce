@@ -1,8 +1,9 @@
 #include "common.hpp"
 #include "constants.hpp"
 #include "fork.hpp"
-#include "trace.hpp"
+// #include "trace.hpp"
 #include "utils.hpp"
+#include "utils/Tracer.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -88,10 +89,6 @@ void replay(const options &opts) {
 
   std::string ldLibraryPath = "LD_LIBRARY_PATH=";
   ldLibraryPath += (opts.location() / ".." / "lib").string() + ":";
-  std::string fullLDPath = ldLibraryPath;
-  if (std::getenv("LD_LIBRARY_PATH")) {
-    fullLDPath += std::string(std::getenv("LD_LIBRARY_PATH"));
-  }
 
   if (opts.print_only()) {
     fmt::print("{} \\\n", outPath);
@@ -117,10 +114,26 @@ void replay(const options &opts) {
     return !var.starts_with("LD_LIBRARY_PATH");
   };
 
+  std::string fullLDPath = ldLibraryPath;
   std::vector<std::string> env;
-  for (auto e : opts.env()) {
-    if (allowedEnvVar(e))
-      env.push_back(toString(e));
+  if (packedReproducer) {
+    std::ifstream envIS{tracePath / "env"};
+    std::string line;
+    while (std::getline(envIS, line)) {
+      if (line.starts_with("LD_LIBRARY_PATH=")) {
+        fullLDPath += ":" + line.substr(16);
+      } else {
+        env.push_back(line);
+      }
+    }
+  } else {
+    for (auto e : opts.env()) {
+      if (allowedEnvVar(e))
+        env.push_back(toString(e));
+    }
+    if (std::getenv("LD_LIBRARY_PATH")) {
+      fullLDPath += std::string(std::getenv("LD_LIBRARY_PATH"));
+    }
   }
   env.emplace_back("LD_PRELOAD=libsystem_intercept.so");
   if (hasOpenCL)
@@ -134,7 +147,7 @@ void replay(const options &opts) {
   env.push_back(fullLDPath);
   env.push_back(outPath);
 
-  Tracer tracer;
+  dpcpp_trace::NativeTracer tracer;
 
   if (packedReproducer) {
     json replayFileMap;
@@ -143,25 +156,24 @@ void replay(const options &opts) {
     fileMap >> replayFileMap;
     fileMap.close();
 
-    tracer.onFileOpen([=](const std::string &filename, const OpenHandler &h) {
-      if (replayFileMap.contains(filename)) {
-        std::string newFN = replayFileMap[filename].get<std::string>();
-        h.execute(newFN);
-      } else {
-        h.execute();
-      }
-    });
-    tracer.onStat([=](const std::string &filename, const StatHandler &h) {
-      if (replayFileMap.contains(filename)) {
-        std::string newFN = replayFileMap[filename].get<std::string>();
-        h.execute(newFN);
-      } else {
-        h.execute();
-      }
-    });
+    tracer.onFileOpen(
+        [=](std::string_view filename, const dpcpp_trace::OpenHandler &h) {
+          if (replayFileMap.contains(filename)) {
+            std::string newFN =
+                replayFileMap[std::string{filename}].get<std::string>();
+            h.replaceFilename(newFN);
+          }
+        });
+    tracer.onStat(
+        [=](std::string_view filename, const dpcpp_trace::StatHandler &h) {
+          if (replayFileMap.contains(filename)) {
+            std::string newFN =
+                replayFileMap[std::string{filename}].get<std::string>();
+            h.replaceFilename(newFN);
+          }
+        });
   }
 
-  exit_code c = exec(executable, execArgs, env, tracer);
-  if (c != exit_code::success)
-    std::cerr << "Application exited with failure code\n";
+  tracer.launch(executable, execArgs, env);
+  tracer.wait();
 }

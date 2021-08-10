@@ -6,6 +6,7 @@
 #include <linux/limits.h>
 #include <stdexcept>
 #include <sys/ptrace.h>
+#include <sys/reg.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <sys/user.h>
@@ -51,12 +52,41 @@ static std::string readString(pid_t pid, std::uintptr_t addr) {
   return result;
 }
 
-static void writeString(pid_t pid, std::uintptr_t addr, std::uintptr_t reg,
-                        std::string_view str) {
+static void redirect_file(pid_t child, const char *file, size_t rdi,
+                          size_t rsp) {
+  char *stack_addr, *file_addr;
+
+  stack_addr = (char *)ptrace(PTRACE_PEEKUSER, child, sizeof(long) * RSP, 0);
+  /* Move further of red zone and make sure we have space for the file name */
+  stack_addr -= 128 + PATH_MAX;
+  file_addr = stack_addr;
+
+  /* Write new file in lower part of the stack */
+  do {
+    int i;
+    char val[sizeof(long)];
+
+    for (i = 0; i < sizeof(long); ++i, ++file) {
+      val[i] = *file;
+      if (*file == '\0')
+        break;
+    }
+
+    if (ptrace(PTRACE_POKETEXT, child, stack_addr, *(long *)val) != 0) {
+      throw std::runtime_error("fail " + std::string(strerror(errno)));
+    }
+    stack_addr += sizeof(long);
+  } while (*file);
+
+  /* Change argument to open */
+  ptrace(PTRACE_POKEUSER, child, sizeof(long) * RSI, file_addr);
+}
+
+static void writeString(pid_t pid, std::uintptr_t reg, std::string_view str) {
   char *stackAddr, *fileAddr;
 
   stackAddr = reinterpret_cast<char *>(
-      ptrace(PTRACE_PEEKUSER, pid, sizeof(long) * addr, nullptr));
+      ptrace(PTRACE_PEEKUSER, pid, sizeof(long) * RSP, nullptr));
   stackAddr -= 128 + PATH_MAX;
 
   fileAddr = stackAddr;
@@ -64,29 +94,27 @@ static void writeString(pid_t pid, std::uintptr_t addr, std::uintptr_t reg,
   bool end = false;
   size_t offset = 0;
   while (!end) {
-    union pokeData {
-      long data;
-      char buf[sizeof(long)];
-    };
+    char buf[sizeof(long)];
 
-    pokeData data;
-    for (size_t i = 0; i < sizeof(long), i + offset <= str.size(); i++) {
+    for (size_t i = 0; i < sizeof(long); i++) {
       if (i + offset == str.size()) [[unlikely]] {
-        data.buf[i] = '\0';
+        buf[i] = '\0';
         end = true;
+        break;
       } else {
-        data.buf[i] = str[offset + i];
-        std::cerr << str[offset + i];
+        buf[i] = str[offset + i];
       }
     }
 
-    ptrace(PTRACE_POKEDATA, pid, stackAddr, data.data);
+    if (ptrace(PTRACE_POKETEXT, pid, stackAddr, *(long *)buf) != 0) {
+      throw std::runtime_error("failed to poke data " +
+                               std::string(strerror(errno)));
+    }
     stackAddr += sizeof(long);
     offset += sizeof(long);
   }
-  std::cerr << "\n";
 
-  ptrace(PTRACE_POKEUSER, pid, sizeof(long) * reg, fileAddr);
+  ptrace(PTRACE_POKEUSER, pid, reg, fileAddr);
 }
 
 namespace dpcpp_trace {
@@ -94,29 +122,27 @@ namespace detail {
 
 class OpenHandlerImpl : public OpenHandler {
 public:
-  OpenHandlerImpl(pid_t p, std::uintptr_t stackAddr, unsigned long fileNameReg)
-      : mPid(p), mStackAddr(stackAddr), mFileNameRegister(fileNameReg) {}
+  OpenHandlerImpl(pid_t p, unsigned long fileNameReg)
+      : mPid(p), mFileNameRegister(fileNameReg) {}
   void replaceFilename(std::string_view newFile) const final {
-    writeString(mPid, mStackAddr, mFileNameRegister, newFile);
+    writeString(mPid, mFileNameRegister, newFile);
   }
 
 private:
   pid_t mPid;
-  std::uintptr_t mStackAddr;
   unsigned long mFileNameRegister;
 };
 
 class StatHandlerImpl : public StatHandler {
 public:
-  StatHandlerImpl(pid_t p, std::uintptr_t stackAddr, unsigned long fileNameReg)
-      : mPid(p), mStackAddr(stackAddr), mFileNameRegister(fileNameReg) {}
+  StatHandlerImpl(pid_t p, unsigned long fileNameReg)
+      : mPid(p), mFileNameRegister(fileNameReg) {}
   void replaceFilename(std::string_view newFile) const final {
-    writeString(mPid, mStackAddr, mFileNameRegister, newFile);
+    writeString(mPid, mFileNameRegister, newFile);
   }
 
 private:
   pid_t mPid;
-  std::uintptr_t mStackAddr;
   unsigned long mFileNameRegister;
 };
 
@@ -181,19 +207,19 @@ public:
 
           switch (syscall) {
           case SYS_stat: {
-            StatHandlerImpl handler{pidValue, regs.rsp, regs.rdi};
+            StatHandlerImpl handler{pidValue, sizeof(long) * RDI};
             std::string filename = readString(pidValue, regs.rdi);
             mStatHandler(filename, handler);
             break;
           }
           case SYS_newfstatat: {
-            StatHandlerImpl handler{pidValue, regs.rsp, regs.rsi};
+            StatHandlerImpl handler{pidValue, sizeof(long) * RSI};
             std::string filename = readString(pidValue, regs.rsi);
             mStatHandler(filename, handler);
             break;
           }
           case SYS_openat: {
-            OpenHandlerImpl handler{pidValue, regs.rsp, regs.rsi};
+            OpenHandlerImpl handler{pidValue, sizeof(long) * RSI};
             std::string filename = readString(pidValue, regs.rsi);
             mOpenFileHandler(filename, handler);
             break;

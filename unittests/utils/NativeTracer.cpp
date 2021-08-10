@@ -114,7 +114,6 @@ TEST_CASE("can replace filenames", "[NativeTracer]") {
     if (filename.ends_with(kReplaceTestFilename1)) {
       fs::path orig{filename};
       fs::path repl = orig.parent_path() / kReplaceTestFilename2;
-      std::clog << "Replacing " << orig << " with " << repl << "\n";
       h.replaceFilename(repl.string());
     }
   });
@@ -125,14 +124,14 @@ TEST_CASE("can replace filenames", "[NativeTracer]") {
   int n;
   is1 >> n;
   is1.close();
-  // fs::remove(fs::temp_directory_path() / kReplaceTestFilename1);
+  fs::remove(fs::temp_directory_path() / kReplaceTestFilename1);
 
   REQUIRE(fs::exists(fs::temp_directory_path() / kReplaceTestFilename2));
   std::ifstream is2{fs::temp_directory_path() / kReplaceTestFilename2};
   int k;
   is2 >> k;
   is2.close();
-  // fs::remove(fs::temp_directory_path() / kReplaceTestFilename2);
+  fs::remove(fs::temp_directory_path() / kReplaceTestFilename2);
 
   REQUIRE(k == 42);
   REQUIRE(n == 10);
