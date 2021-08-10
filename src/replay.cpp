@@ -20,6 +20,7 @@
 #include <unistd.h>
 
 using json = nlohmann::json;
+namespace fs = std::filesystem;
 
 void replay(const options &opts) {
   std::filesystem::path tracePath;
@@ -114,14 +115,17 @@ void replay(const options &opts) {
   };
 
   std::string fullLDPath = ldLibraryPath;
+
   std::vector<std::string> env;
   if (packedReproducer) {
     std::ifstream envIS{tracePath / "env"};
     std::string line;
     while (std::getline(envIS, line)) {
       if (line.starts_with("LD_LIBRARY_PATH=")) {
-        fullLDPath += ":" + line.substr(16);
+        fullLDPath += line.substr(16);
+        std::cout << fullLDPath << "\n";
       } else {
+        std::cout << line << "\n";
         env.push_back(line);
       }
     }
@@ -130,7 +134,7 @@ void replay(const options &opts) {
       if (allowedEnvVar(e))
         env.push_back(toString(e));
     }
-    if (std::getenv("LD_LIBRARY_PATH")) {
+    if (std::getenv("LD_LIBRARY_PATH") != nullptr) {
       fullLDPath += std::string(std::getenv("LD_LIBRARY_PATH"));
     }
   }
@@ -155,21 +159,38 @@ void replay(const options &opts) {
     fileMap >> replayFileMap;
     fileMap.close();
 
+    const auto findSuitableReplacement =
+        [=](std::string_view name) -> std::string {
+      const fs::path basePath = tracePath / kPackedDataPath;
+      if (name.find(".so") != std::string::npos) {
+        // Linux does not check for library locations, that do not exist.
+        // We need to be a bit more creative here.
+        std::string libName = fs::path(name).filename().string();
+        for (const auto &el : replayFileMap.items()) {
+          std::string cand = el.key();
+          if (cand.find(libName) != std::string::npos) {
+            return basePath / el.value();
+          }
+        }
+      } else {
+        if (replayFileMap.contains(name)) {
+          return basePath / replayFileMap[std::string{name}];
+        }
+      }
+      return "";
+    };
+
     tracer.onFileOpen(
         [=](std::string_view filename, const dpcpp_trace::OpenHandler &h) {
-          if (replayFileMap.contains(filename)) {
-            std::string newFN =
-                replayFileMap[std::string{filename}].get<std::string>();
-            h.replaceFilename(newFN);
-          }
+          std::string replacement = findSuitableReplacement(filename);
+          if (!replacement.empty())
+            h.replaceFilename(replacement);
         });
     tracer.onStat(
         [=](std::string_view filename, const dpcpp_trace::StatHandler &h) {
-          if (replayFileMap.contains(filename)) {
-            std::string newFN =
-                replayFileMap[std::string{filename}].get<std::string>();
-            h.replaceFilename(newFN);
-          }
+          std::string replacement = findSuitableReplacement(filename);
+          if (!replacement.empty())
+            h.replaceFilename(replacement);
         });
   }
 

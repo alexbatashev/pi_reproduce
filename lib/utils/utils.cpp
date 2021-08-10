@@ -21,7 +21,6 @@ std::string which(std::string_view executable) {
     }
     auto cand =
         std::filesystem::path(path.substr(lastSeparator, length)) / executable;
-    std::cout << "Cand is " << cand << std::endl;
     if (std::filesystem::exists(cand)) {
       return cand.string();
     }
