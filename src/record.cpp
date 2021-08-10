@@ -99,7 +99,8 @@ void record(const options &opts) {
 
   std::string ldLibraryPath = "LD_LIBRARY_PATH=";
   ldLibraryPath += (opts.location() / ".." / "lib").string() + ":";
-  ldLibraryPath += std::string(std::getenv("LD_LIBRARY_PATH"));
+  if (std::getenv("LD_LIBRARY_PATH"))
+    ldLibraryPath += std::string(std::getenv("LD_LIBRARY_PATH"));
 
   std::vector<std::string> env;
   std::transform(opts.env().begin(), opts.env().end(), std::back_inserter(env),

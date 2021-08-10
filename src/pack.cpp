@@ -60,7 +60,8 @@ void pack(const options &opts) {
     if (!std::filesystem::is_regular_file(candPath))
       continue;
 
-    std::string newFileName = std::to_string(counter++);
+    std::string newFileName =
+        std::to_string(counter++) + "_" + candPath.stem().string();
 
     std::filesystem::copy_file(candPath,
                                opts.input() / kPackedDataPath / newFileName);
