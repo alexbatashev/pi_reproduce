@@ -3,6 +3,7 @@
 #include "utils/Tracer.hpp"
 
 #include <chrono>
+#include <csignal>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -28,7 +29,7 @@ TEST_CASE("can fork processes", "[NativeTracer]") {
   };
 
   NativeTracer tracer;
-  tracer.fork(start);
+  tracer.fork(start, false);
   tracer.wait();
 
   std::ifstream is{fs::temp_directory_path() / kForkTestFilename};
@@ -55,7 +56,7 @@ TEST_CASE("can trace files being open", "[NativeTracer]") {
     if (filename.ends_with(kOpenTestFilename))
       test = true;
   });
-  tracer.fork(start);
+  tracer.fork(start, false);
   tracer.wait();
 
   std::ifstream is{fs::temp_directory_path() / kOpenTestFilename};
@@ -84,7 +85,7 @@ TEST_CASE("can trace files being stat", "[NativeTracer]") {
     if (filename.ends_with(kStatTestFilename))
       test = true;
   });
-  tracer.fork(start);
+  tracer.fork(start, false);
   tracer.wait();
 
   std::ifstream is{fs::temp_directory_path() / kStatTestFilename};
@@ -117,7 +118,7 @@ TEST_CASE("can replace filenames", "[NativeTracer]") {
       h.replaceFilename(repl.string());
     }
   });
-  tracer.fork(start);
+  tracer.fork(start, false);
   tracer.wait();
 
   std::ifstream is1{fs::temp_directory_path() / kReplaceTestFilename1};

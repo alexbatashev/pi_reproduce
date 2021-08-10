@@ -176,17 +176,17 @@ public:
       }
     };
 
-    fork(std::move(start));
+    fork(std::move(start), true);
   }
 
-  void fork(std::function<void()> child) {
+  void fork(std::function<void()> child, bool initialSuspend) {
     pid_t pidValue = ::fork();
     if (pidValue == 0) {
       child();
       exit(0);
     } else {
-      // if (ptrace(PTRACE_ATTACH, pidValue, 0, 0) != 0)
-      //  throw std::runtime_error("Failed to attach");
+      if (!initialSuspend && ptrace(PTRACE_ATTACH, pidValue, 0, 0) != 0)
+        throw std::runtime_error("Failed to attach");
       if (waitpid(pidValue, 0, __WALL) == -1)
         throw std::runtime_error(strerror(errno));
       ptrace(PTRACE_SETOPTIONS, pidValue, 0, PTRACE_O_TRACESYSGOOD);
@@ -265,7 +265,9 @@ void NativeTracer::launch(std::string_view executable,
   mImpl->launch(executable, args, env);
 }
 
-void NativeTracer::fork(std::function<void()> child) { mImpl->fork(child); }
+void NativeTracer::fork(std::function<void()> child, bool initialSuspend) {
+  mImpl->fork(child, initialSuspend);
+}
 
 void NativeTracer::onFileOpen(NativeTracer::onFileOpenHandler handler) {
   mImpl->onFileOpen(handler);
