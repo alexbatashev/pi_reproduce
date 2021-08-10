@@ -185,61 +185,57 @@ public:
       child();
       exit(0);
     } else {
-      const auto mainLoop = [this, pidValue](std::stop_token token) {
-        if (ptrace(PTRACE_ATTACH, pidValue, 0, 0) == -1)
-          throw std::runtime_error("Failed to attach to process");
-        if (waitpid(pidValue, 0, 0) == -1)
+      // if (ptrace(PTRACE_ATTACH, pidValue, 0, 0) != 0)
+      //  throw std::runtime_error("Failed to attach");
+      if (waitpid(pidValue, 0, __WALL) == -1)
+        throw std::runtime_error(strerror(errno));
+      ptrace(PTRACE_SETOPTIONS, pidValue, 0, PTRACE_O_TRACESYSGOOD);
+      ptrace(PTRACE_SETOPTIONS, pidValue, 0, PTRACE_O_EXITKILL);
+
+      while (true) {
+        if (ptrace(PTRACE_SYSCALL, pidValue, 0, 0) == -1)
+          break;
+        if (waitpid(pidValue, 0, __WALL) == -1)
           throw std::runtime_error(strerror(errno));
-        ptrace(PTRACE_SETOPTIONS, pidValue, 0, PTRACE_O_TRACESYSGOOD);
-        ptrace(PTRACE_SETOPTIONS, pidValue, 0, PTRACE_O_EXITKILL);
 
-        while (!token.stop_requested()) {
-          if (ptrace(PTRACE_SYSCALL, pidValue, 0, 0) == -1)
-            break;
-          if (waitpid(pidValue, 0, 0) == -1)
-            throw std::runtime_error(strerror(errno));
+        struct user_regs_struct regs;
+        if (ptrace(PTRACE_GETREGS, pidValue, 0, &regs) == -1)
+          throw std::runtime_error(strerror(errno));
 
-          struct user_regs_struct regs;
-          if (ptrace(PTRACE_GETREGS, pidValue, 0, &regs) == -1)
-            throw std::runtime_error(strerror(errno));
+        const long syscall = regs.orig_rax;
 
-          const long syscall = regs.orig_rax;
-
-          switch (syscall) {
-          case SYS_stat: {
-            StatHandlerImpl handler{pidValue, sizeof(long) * RDI};
-            std::string filename = readString(pidValue, regs.rdi);
-            mStatHandler(filename, handler);
-            break;
-          }
-          case SYS_newfstatat: {
-            StatHandlerImpl handler{pidValue, sizeof(long) * RSI};
-            std::string filename = readString(pidValue, regs.rsi);
-            mStatHandler(filename, handler);
-            break;
-          }
-          case SYS_openat: {
-            OpenHandlerImpl handler{pidValue, sizeof(long) * RSI};
-            std::string filename = readString(pidValue, regs.rsi);
-            mOpenFileHandler(filename, handler);
-            break;
-          }
-          default:
-            break;
-          }
-          if (ptrace(PTRACE_SYSCALL, pidValue, 0, 0) == -1)
-            throw std::runtime_error(strerror(errno));
-          if (waitpid(pidValue, 0, 0) == -1)
-            throw std::runtime_error(strerror(errno));
-          if (ptrace(PTRACE_GETREGS, pidValue, 0, &regs) == -1) {
-            if (errno == ESRCH)
-              break;
-            throw std::runtime_error(strerror(errno));
-          }
+        switch (syscall) {
+        case SYS_stat: {
+          StatHandlerImpl handler{pidValue, sizeof(long) * RDI};
+          std::string filename = readString(pidValue, regs.rdi);
+          mStatHandler(filename, handler);
+          break;
         }
-      };
-
-      mWorker = std::jthread(mainLoop);
+        case SYS_newfstatat: {
+          StatHandlerImpl handler{pidValue, sizeof(long) * RSI};
+          std::string filename = readString(pidValue, regs.rsi);
+          mStatHandler(filename, handler);
+          break;
+        }
+        case SYS_openat: {
+          OpenHandlerImpl handler{pidValue, sizeof(long) * RSI};
+          std::string filename = readString(pidValue, regs.rsi);
+          mOpenFileHandler(filename, handler);
+          break;
+        }
+        default:
+          break;
+        }
+        if (ptrace(PTRACE_SYSCALL, pidValue, 0, 0) == -1)
+          throw std::runtime_error(strerror(errno));
+        if (waitpid(pidValue, 0, __WALL) == -1)
+          throw std::runtime_error(strerror(errno));
+        if (ptrace(PTRACE_GETREGS, pidValue, 0, &regs) == -1) {
+          if (errno == ESRCH)
+            break;
+          throw std::runtime_error(strerror(errno));
+        }
+      }
     }
   }
 
@@ -249,14 +245,6 @@ public:
   void onStat(NativeTracer::onStatHandler handler) { mStatHandler = handler; }
 
   void wait() {
-    if (mWorker.joinable())
-      mWorker.join();
-  }
-
-  ~NativeTracerImpl() {
-    mWorker.request_stop();
-    if (mWorker.joinable())
-      mWorker.join();
   }
 
 private:
@@ -264,7 +252,6 @@ private:
                                                         const OpenHandler &) {};
   NativeTracer::onStatHandler mStatHandler = [](std::string_view,
                                                 const StatHandler &) {};
-  std::jthread mWorker;
 };
 } // namespace detail
 

@@ -1,6 +1,6 @@
 // REQUIRES: linux
 // RUN: echo "1" > %t.txt
-// RUN: %clangxx %s -o --std=c++17 %t.exe
+// RUN: %clangxx %s --std=c++17 -o %t.exe
 // RUN: %dpcpp_trace record --override -o %t_trace %t.exe -- %t.txt
 // RUN: rm %t.txt
 // RUN: %dpcpp_trace pack %t_trace
@@ -10,7 +10,7 @@
 #include <fstream>
 #include <filesystem>
 
-using fs = std::filesystem;
+namespace fs = std::filesystem;
 
 int main(int argc, char *argv[]) {
   if (argc != 2)

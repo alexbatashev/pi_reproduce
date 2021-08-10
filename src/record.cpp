@@ -123,10 +123,10 @@ void record(const options &opts) {
 
   tracer.onFileOpen(
       [&files](std::string_view fileName, const dpcpp_trace::OpenHandler &h) {
-        files.push_back(fileName);
+        std::string fn{fileName};
+        files.push_back(fn);
       });
 
-  // exit_code c = exec(executable, execArgs, env, tracer);
   tracer.launch(executable, execArgs, env);
 
   std::ofstream filesOut{opts.output() / kFilesConfigName};
