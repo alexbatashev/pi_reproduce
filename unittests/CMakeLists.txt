@@ -12,3 +12,7 @@ include(CTest)
 include(Catch)
 
 add_subdirectory(utils)
+
+if (BUILD_DEBUGGER)
+  add_subdirectory(debug)
+endif()

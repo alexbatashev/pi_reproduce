@@ -1,0 +1,186 @@
+add_dpcpp_trace_library(host_debugger SHARED
+  HostDebugger.cpp
+  HostProcess.cpp
+  )
+
+target_include_directories(host_debugger PRIVATE
+  ${INTEL_LLVM_SOURCE_PATH}/lldb/include
+  ${INTEL_LLVM_SOURCE_PATH}/llvm/include
+  ${INTEL_LLVM_BINARY_PATH}/tools/lldb/include
+  ${INTEL_LLVM_BINARY_PATH}/include
+  ${INTEL_LLVM_SOURCE_PATH}/lldb/source
+  )
+
+find_package(LLVM PATHS "${INTEL_LLVM_BINARY_PATH}" NO_DEFAULT_PATH
+  NO_CMAKE_FIND_ROOT_PATH CONFIG REQUIRED)
+find_package(Clang PATHS "${INTEL_LLVM_BINARY_PATH}" NO_DEFAULT_PATH
+  NO_CMAKE_FIND_ROOT_PATH CONFIG REQUIRED)
+message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+
+list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
+list(APPEND CMAKE_MODULE_PATH "${CLANG_CMAKE_DIR}")
+include(AddLLVM)
+llvm_map_components_to_libnames(LLVM_LIBRARIES asmparser asmprinter support
+  native debuginfopdb debuginfodwarf)
+
+set(SYSTEM_LIBS)
+list(APPEND LLDB_SYSTEM_LIBS ${CMAKE_DL_LIBS})
+if (CMAKE_SYSTEM_NAME MATCHES "Windows")
+  list(APPEND LLDB_SYSTEM_LIBS ws2_32 rpcrt4)
+endif ()
+
+list(APPEND LLDB_SYSTEM_LIBS gpm)
+
+find_package(Curses REQUIRED)
+find_package(Threads REQUIRED)
+find_package(LibLZMA REQUIRED)
+find_package(LibXml2 REQUIRED)
+find_package(ZLIB REQUIRED)
+find_library(LIBEDIT_LIBRARY edit)
+find_library(LIBPANEL_LIBRARY panel)
+
+target_link_options(host_debugger PRIVATE -Wl,--as-needed)
+target_link_libraries(host_debugger PRIVATE
+-Wl,--start-group
+lldbBase
+lldbBreakpoint
+lldbCommands
+lldbCore
+lldbDataFormatters
+lldbExpression
+lldbHost
+lldbInitialization
+lldbIntelMPX
+lldbInterpreter
+lldbPluginABIX86
+lldbPluginAppleObjCRuntime
+lldbPluginArchitectureAArch64
+lldbPluginArchitectureArm
+lldbPluginArchitectureMips
+lldbPluginArchitecturePPC64
+lldbPluginClangCommon
+lldbPluginCPlusPlusLanguage
+lldbPluginCPPRuntime
+lldbPluginCXXItaniumABI
+lldbPluginDisassemblerLLVMC
+lldbPluginDynamicLoaderDarwinKernel
+lldbPluginDynamicLoaderHexagonDYLD
+lldbPluginDynamicLoaderMacOSXDYLD
+lldbPluginDynamicLoaderPosixDYLD
+lldbPluginDynamicLoaderStatic
+lldbPluginDynamicLoaderWasmDYLD
+lldbPluginDynamicLoaderWindowsDYLD
+lldbPluginExpressionParserClang
+lldbPluginInstructionARM64
+lldbPluginInstructionARM
+lldbPluginInstructionMIPS64
+lldbPluginInstructionMIPS
+lldbPluginInstructionPPC64
+lldbPluginInstrumentationRuntimeASan
+lldbPluginInstrumentationRuntimeMainThreadChecker
+lldbPluginInstrumentationRuntimeTSan
+lldbPluginInstrumentationRuntimeUBSan
+lldbPluginJITLoaderGDB
+lldbPluginMemoryHistoryASan
+lldbPluginObjCLanguage
+lldbPluginObjCPlusPlusLanguage
+lldbPluginObjCRuntime
+lldbPluginObjectContainerBSDArchive
+lldbPluginObjectContainerMachOArchive
+lldbPluginObjectFileBreakpad
+lldbPluginObjectFileELF
+lldbPluginObjectFileJIT
+lldbPluginObjectFileMachO
+lldbPluginObjectFilePDB
+lldbPluginObjectFilePECOFF
+lldbPluginObjectFileWasm
+lldbPluginOperatingSystemPython
+lldbPluginPlatformAndroid
+lldbPluginPlatformFreeBSD
+lldbPluginPlatformGDB
+lldbPluginPlatformLinux
+lldbPluginPlatformMacOSX
+lldbPluginPlatformNetBSD
+lldbPluginPlatformOpenBSD
+lldbPluginPlatformPOSIX
+lldbPluginPlatformWindows
+lldbPluginProcessElfCore
+lldbPluginProcessGDBRemote
+lldbPluginProcessLinux
+lldbPluginProcessMachCore
+lldbPluginProcessMinidump
+lldbPluginProcessPOSIX
+lldbPluginProcessUtility
+lldbPluginRenderScriptRuntime
+lldbPluginScriptedProcess
+lldbPluginScriptInterpreterLua
+lldbPluginScriptInterpreterNone
+lldbPluginScriptInterpreterPython
+lldbPluginStructuredDataDarwinLog
+lldbPluginSymbolFileBreakpad
+lldbPluginSymbolFileDWARF
+lldbPluginSymbolFileNativePDB
+lldbPluginSymbolFilePDB
+lldbPluginSymbolFileSymtab
+lldbPluginSymbolVendorELF
+lldbPluginSymbolVendorWasm
+lldbPluginSystemRuntimeMacOSX
+lldbPluginTraceCommon
+lldbPluginTypeSystemClang
+lldbPluginUnwindAssemblyInstEmulation
+lldbPluginUnwindAssemblyX86
+lldbSymbol
+lldbTarget
+lldbUtility
+
+${LLVM_LIBRARIES}
+clangBasic
+clangAPINotes
+clangLex
+clangParse
+clangAST
+clangDynamicASTMatchers
+clangASTMatchers
+clangCrossTU
+clangSema
+clangCodeGen
+clangAnalysis
+clangEdit
+clangRewrite
+clangARCMigrate
+clangDriver
+clangSerialization
+clangRewriteFrontend
+clangFrontend
+clangFrontendTool
+clangToolingCore
+clangToolingInclusions
+clangToolingRefactoring
+clangToolingASTDiff
+clangToolingSyntax
+clangDependencyScanning
+clangTransformer
+clangTooling
+clangDirectoryWatcher
+clangIndex
+clangIndexSerialization
+clangStaticAnalyzerCore
+clangStaticAnalyzerCheckers
+clangStaticAnalyzerFrontend
+clangFormat
+clangTesting
+clangInterpreter
+clangHandleCXX
+clangHandleLLVM
+
+${CURSES_LIBRARIES}
+Threads::Threads
+LibLZMA::LibLZMA
+LibXml2::LibXml2
+ZLIB::ZLIB
+${LIBEDIT_LIBRARY}
+${LIBPANEL_LIBRARY}
+
+-Wl,--end-group
+)
+

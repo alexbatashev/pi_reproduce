@@ -9,4 +9,4 @@ if (DPCPP_TRACE_LINK_STATICALLY)
 endif()
 
 find_package(Boost REQUIRED COMPONENTS system)
-target_link_libraries(debug_server PUBLIC fmt::fmt Boost::boost Boost::system)
+target_link_libraries(debug_server PUBLIC CONAN_PKG::fmt Boost::boost Boost::system)
