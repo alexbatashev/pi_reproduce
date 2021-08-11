@@ -1,4 +1,5 @@
 // REQUIRES: linux
+// UNSUPPORTED: DISABLED
 // RUN: %clangxx %s --std=c++17 -o %t.exe
 // RUN: env TEST_ENV=1 LD_LIBRARY_PATH=TEST:$LD_LIBRARY_PATH %dpcpp_trace record --override -o %t_trace %t.exe -- %t.txt
 // RUN: %dpcpp_trace pack %t_trace
