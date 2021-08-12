@@ -2,15 +2,15 @@ FROM ubuntu:18.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN echo "deb http://ppa.launchpad.net/ubuntu-toolchain-r/test/ubuntu bionic main" >> /etc/apt/sources.list
 RUN apt update && apt install -yqq \
      build-essential \
      cmake \
      ninja-build \
      python3 \
-     git \
-     gcc-11 && apt clean && \
-     update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 110 --slave \
+     git && apt clean
+RUN add-apt-repository ppa:ubuntu-toolchain-r/test
+RUN apt update && apt install gcc-11 && apt clean
+RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 110 --slave \
      /usr/bin/g++ g++ /usr/bin/g++-11 --slave /usr/bin/gcov gcov /usr/bin/gcov-11
 
 
