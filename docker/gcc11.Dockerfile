@@ -6,6 +6,7 @@ RUN apt update && apt install -yqq \
      build-essential \
      cmake \
      ninja-build \
+     software-properties-common \
      python3 \
      git && apt clean
 RUN add-apt-repository ppa:ubuntu-toolchain-r/test
