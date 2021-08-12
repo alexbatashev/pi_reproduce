@@ -4,7 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt update && apt install -yqq \
      build-essential \
-     cmake \
+     wget \
      ninja-build \
      software-properties-common \
      python3 \
@@ -14,6 +14,8 @@ RUN apt update && apt install gcc-11 && apt clean
 RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 110 --slave \
      /usr/bin/g++ g++ /usr/bin/g++-11 --slave /usr/bin/gcov gcov /usr/bin/gcov-11
 
+RUN wget https://github.com/Kitware/CMake/releases/download/v3.21.1/cmake-3.21.1-linux-x86_64.sh \
+  && bash cmake-3.21.1-linux-x86_64.sh && rm cmake-3.21.1-linux-x86_64.sh
 
 WORKDIR /src
 
