@@ -1,38 +1,22 @@
-FROM ubuntu:21.04
+FROM ubuntu:18.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+RUN echo "deb http://ppa.launchpad.net/ubuntu-toolchain-r/test/ubuntu bionic main" >> /etc/apt/sources.list
 RUN apt update && apt install -yqq \
      build-essential \
      cmake \
      ninja-build \
      python3 \
      git \
-     libboost-all-dev \
-     libevent-dev \
-     libdouble-conversion-dev \
-     libgoogle-glog-dev \
-     libgflags-dev \
-     libiberty-dev \
-     liblz4-dev \
-     liblzma-dev \
-     libsnappy-dev \
-     zlib1g-dev \
-     binutils-dev \
-     libjemalloc-dev \
-     libssl-dev \
-     pkg-config \
-     libunwind-dev
+     gcc-11 && apt clean && \
+     update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 110 --slave \
+     /usr/bin/g++ g++ /usr/bin/g++-11 --slave /usr/bin/gcov gcov /usr/bin/gcov-11
+
 
 WORKDIR /src
 
 ARG LLVM_TAG=sycl
-
-RUN git clone https://github.com/fmtlib/fmt.git && cd fmt && mkdir __build && \
-      cd __build && cmake -GNinja .. && ninja install && cd ../../ && rm -rf fmt
-RUN git clone --depth 1 --branch cache_locality_cpp20 https://github.com/alexbatashev/folly.git \
-      && cd folly && mkdir __build && cd __build && cmake -GNinja .. && \
-      ninja && ninja install && cd ../../ && rm -rf folly
 
 RUN git clone --depth 1 --branch $LLVM_TAG https://github.com/intel/llvm.git
 RUN cd llvm && mkdir build && cd build && \
