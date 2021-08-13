@@ -15,7 +15,7 @@ llvm_config.with_environment('LD_LIBRARY_PATH', os.path.join(config.intel_llvm_b
 
 config.available_features.add('linux')
 
-devices_res = subprocess.run(config.intel_llvm_bin_root + "/bin/sycl-ls", shell=True, capture_output=True)
+devices_res = subprocess.run(config.intel_llvm_bin_root + "/bin/sycl-ls", shell=True, stdout=subprocess.PIPE)
 
 if "opencl:" in str(devices_res.stdout):
     config.available_features.add('opencl')
