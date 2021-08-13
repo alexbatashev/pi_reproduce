@@ -10,7 +10,7 @@ RUN apt update && apt install -yqq \
      python3 \
      git && apt clean
 RUN add-apt-repository ppa:ubuntu-toolchain-r/test
-RUN apt update && apt install -yqq gcc-11 && apt clean
+RUN apt update && apt install -yqq gcc-11 g++-11 && apt clean
 RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 110 --slave \
      /usr/bin/g++ g++ /usr/bin/g++-11 --slave /usr/bin/gcov gcov /usr/bin/gcov-11
 
