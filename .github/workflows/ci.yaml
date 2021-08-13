@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         with:
-          submodules: true
+          submodules: false
       - name: Install dependencies
         run: |
           echo 'APT::Acquire::Retries "3";' > /etc/apt/apt.conf.d/80-retries
