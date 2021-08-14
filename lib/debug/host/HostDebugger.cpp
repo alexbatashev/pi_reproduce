@@ -1,6 +1,7 @@
 #include "HostDebugger.hpp"
 #include "HostProcess.hpp"
 
+#include "lldb/Core/Module.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Host/MainLoop.h"
 #include "lldb/Initialization/SystemInitializerCommon.h"
@@ -52,7 +53,12 @@ HostDebugger::HostDebugger() {
   mDebugger->SetAsyncExecution(true);
 }
 
-HostDebugger::~HostDebugger() {}
+HostDebugger::~HostDebugger() {
+  if (mTarget)
+    mTarget->Destroy();
+  if (mDebugger)
+    Debugger::Destroy(mDebugger);
+}
 
 void HostDebugger::launch(std::string_view executable,
                           std::span<std::string> args,
@@ -60,9 +66,8 @@ void HostDebugger::launch(std::string_view executable,
   auto error = mDebugger->GetTargetList().CreateTarget(
       *mDebugger, "", "", eLoadDependentsNo, nullptr, mTarget);
   if (error.Fail()) {
-    throw std::runtime_error("Failed to create target");
+    std::terminate();
   }
-
   ProcessLaunchInfo launchInfo;
   launchInfo.SetExecutableFile(FileSpec(executable.data()), false);
   launchInfo.GetFlags().Set(eLaunchFlagDebug);
@@ -83,14 +88,23 @@ void HostDebugger::launch(std::string_view executable,
 
   launchInfo.SetArguments(cArgs.data(), true);
 
-  mProcess = mTarget->CreateProcess(launchInfo.GetListener(), "native-host",
-                                    nullptr, false);
+  launchInfo.SetProcessPluginName("native-host");
 
-  if (!mProcess) {
-    throw std::runtime_error("Failed to create process");
+  ModuleSpec moduleSpec(FileSpec(executable.data()));
+  mModule = mTarget->GetOrCreateModule(moduleSpec, true);
+  if (!mModule) {
+    std::cerr << "Failed to create module\n";
+    std::terminate();
   }
 
-  error = mProcess->Launch(launchInfo);
+  if (Module *exeModule = mTarget->GetExecutableModulePointer())
+    launchInfo.SetExecutableFile(exeModule->GetPlatformFileSpec(), true);
+
+  error = mTarget->Launch(launchInfo, nullptr);
+  if (error.Fail()) {
+    std::cerr << error.AsCString() << std::endl;
+    std::terminate();
+  }
 }
 
 void HostDebugger::attach(uint64_t pid) {}
@@ -98,3 +112,13 @@ void HostDebugger::attach(uint64_t pid) {}
 void HostDebugger::detach() {
   // mProcess->Detach(false);
 }
+
+void HostDebugger::wait() {
+  StateType type = eStateInvalid;
+  do {
+    type = mTarget->GetProcessSP()->WaitForProcessToStop(llvm::None);
+    std::cout << "Type is " << (int)type << "\n";
+  } while (type != eStateExited || type != eStateCrashed);
+}
+void HostDebugger::kill() {}
+void HostDebugger::interrupt() {}

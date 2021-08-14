@@ -25,10 +25,12 @@ public:
   void onFileOpen(dpcpp_trace::Tracer::onFileOpenHandler handler) final{};
   void onStat(dpcpp_trace::Tracer::onStatHandler handler) final{};
 
-  void wait() final {}
+  void wait() final;
+  void kill() final;
+  void interrupt() final;
 
 private:
   lldb::DebuggerSP mDebugger;
   lldb::TargetSP mTarget;
-  lldb::ProcessSP mProcess;
+  lldb::ModuleSP mModule;
 };

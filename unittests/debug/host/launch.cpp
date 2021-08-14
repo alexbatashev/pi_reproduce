@@ -12,21 +12,9 @@ TEST_CASE("successfully attaches to process", "[HostDebugger]") {
   initialize(&info);
   HostDebugger debugger;
 
-  /*
-  auto start = []() {
-    // traceMe();
-    std::array<const char *, 2> cargs = {"ls", nullptr};
-    execve("/usr/bin/ls", const_cast<char * const *>(cargs.data()), nullptr);
-  };
-
-  auto child = fork(start);
-  // child.wait();
-  */
-
   std::array<std::string, 1> cargs = {"ls"};
   std::array<std::string, 1> cenv = {"A=B"};
 
   REQUIRE_NOTHROW(debugger.launch("/usr/bin/ls", cargs, cenv));
   REQUIRE_NOTHROW(debugger.detach());
-  // child.wait();
 }

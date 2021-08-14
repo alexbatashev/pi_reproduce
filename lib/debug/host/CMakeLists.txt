@@ -39,6 +39,7 @@ find_package(ZLIB REQUIRED)
 find_library(LIBEDIT_LIBRARY edit)
 find_library(LIBPANEL_LIBRARY panel)
 
+target_compile_options(host_debugger PRIVATE -fno-exceptions -fno-rtti)
 target_link_options(host_debugger PRIVATE -Wl,--as-needed)
 target_link_libraries(host_debugger PRIVATE
 -Wl,--start-group

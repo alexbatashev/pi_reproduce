@@ -36,6 +36,8 @@ public:
   virtual ~Tracer() = default;
 
   virtual void wait() = 0;
+  virtual void kill() = 0;
+  virtual void interrupt() = 0;
 };
 
 class NativeTracer : public Tracer {
@@ -52,6 +54,8 @@ public:
   void onStat(onStatHandler) final;
 
   void wait() final;
+  void kill() final;
+  void interrupt() final;
 
 private:
   std::shared_ptr<detail::NativeTracerImpl> mImpl;
