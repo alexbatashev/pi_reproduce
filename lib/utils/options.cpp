@@ -187,11 +187,18 @@ void options::parseUnpackOptions(int argc, char *argv[]) {
 }
 
 void options::parseDebugOptions(int argc, char *argv[]) {
+  if (argc <= 2) {
+    std::cerr << "debug requires arguments\n";
+    exit(EXIT_FAILURE);
+  }
+
   int i = 2;
   while (i < argc) {
     std::string_view opt{argv[i]};
 
-    if (opt == "--server" && !mDebugServerOnly) {
+    if (opt[0] != '-') {
+      mInput = opt;
+    } else if (opt == "--server" && !mDebugServerOnly) {
       mDebugServerOnly = true;
     }
 

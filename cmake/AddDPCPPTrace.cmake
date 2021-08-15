@@ -16,6 +16,7 @@ macro(set_dpcpp_trace_common_options target_name)
 
   set_target_properties(${target_name} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin
+    INSTALL_RPATH "../lib"
     )
 
   if (DPCPP_TRACE_LINK_STATICALLY)

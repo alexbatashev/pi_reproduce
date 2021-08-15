@@ -22,7 +22,9 @@ using namespace lldb_private;
 
 std::unique_ptr<SystemInitializerCommon> gSystemInitializer;
 
-extern "C" int initialize(DebuggerInfo *) {
+extern "C" void deinitialize(dpcpp_trace::AbstractDebugger *d) { delete d; }
+
+extern "C" int initialize(DebuggerInfo *info) {
   // TODO enable python?
   gSystemInitializer = std::make_unique<SystemInitializerCommon>(nullptr);
   auto err = gSystemInitializer->Initialize();
@@ -44,6 +46,9 @@ extern "C" int initialize(DebuggerInfo *) {
   PluginManager::Initialize();
 
   Debugger::SettingsInitialize();
+
+  info->debugger = new HostDebugger();
+  info->deinitialize = deinitialize;
 
   return 0;
 }

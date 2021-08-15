@@ -1,12 +1,16 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 
+namespace dpcpp_trace {
 class AbstractDebugger;
+}
 
 extern "C" {
 struct DebuggerInfo {
-  AbstractDebugger *debugger;
+  dpcpp_trace::AbstractDebugger *debugger;
+  void (*deinitialize)(dpcpp_trace::AbstractDebugger *);
 };
 int initialize(DebuggerInfo *);
 }
