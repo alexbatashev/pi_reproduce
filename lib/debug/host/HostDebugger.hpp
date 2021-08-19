@@ -25,7 +25,7 @@ public:
   void onFileOpen(dpcpp_trace::Tracer::onFileOpenHandler handler) final{};
   void onStat(dpcpp_trace::Tracer::onStatHandler handler) final{};
 
-  void wait() final;
+  int wait() final;
   void kill() final;
   void interrupt() final;
 

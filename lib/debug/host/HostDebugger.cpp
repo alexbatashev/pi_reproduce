@@ -118,12 +118,13 @@ void HostDebugger::detach() {
   // mProcess->Detach(false);
 }
 
-void HostDebugger::wait() {
+int HostDebugger::wait() {
   StateType type = eStateInvalid;
   do {
     type = mTarget->GetProcessSP()->WaitForProcessToStop(llvm::None);
     std::cout << "Type is " << (int)type << "\n";
   } while (type != eStateExited || type != eStateCrashed);
+  return 0;
 }
 void HostDebugger::kill() {}
 void HostDebugger::interrupt() {}
