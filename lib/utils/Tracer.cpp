@@ -1,5 +1,6 @@
 #include "utils/Tracer.hpp"
 
+#include <cstdlib>
 #include <cstring>
 #include <errno.h>
 #include <iostream>
@@ -17,12 +18,7 @@
 
 class WaitResult {
 public:
-  enum class ResultType {
-    success,
-    signal,
-    fail,
-    exited
-  };
+  enum class ResultType { success, signal, fail, exited };
   WaitResult(ResultType type, int code) : mType(type), mCode(code) {}
 
   operator bool() const noexcept { return mType == ResultType::success; }
@@ -36,12 +32,12 @@ private:
   int mCode;
 };
 
-static WaitResult wait(pid_t pid) { 
+static WaitResult wait(pid_t pid) {
   int status = 0;
   pid_t res = waitpid(pid, &status, __WALL);
   if (res == -1)
     return {WaitResult::ResultType::fail, 0};
-  
+
   if (WIFEXITED(status)) {
     return {WaitResult::ResultType::exited, WEXITSTATUS(status)};
   }
@@ -50,7 +46,22 @@ static WaitResult wait(pid_t pid) {
     return {WaitResult::ResultType::signal, WTERMSIG(status)};
   }
 
-  if (WIFSTOPPED(status) || WIFCONTINUED(status)) {
+  if (WIFSTOPPED(status)) {
+    int signal = WSTOPSIG(status);
+    switch (signal) {
+    case SIGTERM:
+    case SIGSEGV:
+    case SIGINT:
+    case SIGILL:
+    case SIGABRT:
+    case SIGFPE:
+      return {WaitResult::ResultType::signal, signal};
+    default:
+      return {WaitResult::ResultType::success, 0};
+    }
+  }
+
+  if (WIFCONTINUED(status)) {
     return {WaitResult::ResultType::success, 0};
   }
 
