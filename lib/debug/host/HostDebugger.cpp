@@ -127,3 +127,16 @@ void HostDebugger::wait() {
 }
 void HostDebugger::kill() {}
 void HostDebugger::interrupt() {}
+
+bool HostDebugger::isAttached() { return mTarget != nullptr; }
+
+void *HostDebugger::cast(size_t type) {
+  if (type == DebuggerRTTI::getID()) {
+    return static_cast<dpcpp_trace::AbstractDebugger *>(this);
+  } else if (type == TracerRTTI::getID()) {
+    return static_cast<dpcpp_trace::Tracer *>(this);
+  } else if (type == ThisRTTI::getID()) {
+    return this;
+  }
+  return nullptr;
+}

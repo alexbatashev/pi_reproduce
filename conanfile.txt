@@ -9,6 +9,7 @@ zstd/1.5.0
 opencl-icd-loader/2021.04.29
 benchmark/1.5.5
 boost/1.76.0
+ctre/3.4.1
 
 [generators]
 cmake

@@ -281,4 +281,5 @@ void NativeTracer::onStat(NativeTracer::onStatHandler handler) {
 void NativeTracer::wait() { mImpl->wait(); }
 void NativeTracer::kill() { mImpl->kill(); }
 void NativeTracer::interrupt() { mImpl->interrupt(); }
+
 } // namespace dpcpp_trace

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "utils/RTTI.hpp"
+
 #include <functional>
 #include <memory>
 #include <span>
@@ -20,8 +22,10 @@ public:
   virtual void replaceFilename(std::string_view newFile) const = 0;
 };
 
-class Tracer {
+class Tracer : public RTTIRoot, public RTTIChild<Tracer> {
 public:
+  constexpr static char ID = static_cast<size_t>(RTTIHierarchy::Tracer);
+
   using onFileOpenHandler =
       std::function<void(std::string_view, const OpenHandler &)>;
   using onStatHandler =
@@ -38,6 +42,13 @@ public:
   virtual void wait() = 0;
   virtual void kill() = 0;
   virtual void interrupt() = 0;
+
+  void *cast(std::size_t type) override {
+    if (type == RTTIChild<Tracer>::getID()) {
+      return this;
+    }
+    return nullptr;
+  }
 };
 
 class NativeTracer : public Tracer {

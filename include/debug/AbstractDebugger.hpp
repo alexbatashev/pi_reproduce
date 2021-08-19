@@ -1,5 +1,7 @@
 #pragma once
 
+#include "utils/RTTI.hpp"
+
 #include <cstdint>
 #include <memory>
 
@@ -16,11 +18,23 @@ int initialize(DebuggerInfo *);
 }
 
 namespace dpcpp_trace {
-class AbstractDebugger {
+class AbstractDebugger : public RTTIRoot, public RTTIChild<AbstractDebugger> {
 public:
+  constexpr static std::size_t ID =
+      static_cast<size_t>(RTTIHierarchy::AbstractDebugger);
+
   virtual ~AbstractDebugger() = default;
 
   virtual void attach(uint64_t pid) = 0;
+  virtual bool isAttached() = 0;
   virtual void detach() = 0;
+
+  void *cast(std::size_t type) override {
+    if (type == RTTIChild<AbstractDebugger>::getID()) {
+      return this;
+    }
+    return nullptr;
+  }
 };
+
 } // namespace dpcpp_trace

@@ -56,6 +56,7 @@ private:
   std::jthread mWorker;
   std::unique_ptr<lldb_private::NativeProcessProtocol> mProcess;
   std::shared_ptr<lldb_private::MainLoop> mMainLoop;
+  std::shared_ptr<lldb_private::CommandObjectMultiword> mCommandObject;
   std::unique_ptr<HostDelegate> mDelegate;
 };
 } // namespace dpcpp_trace
