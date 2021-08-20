@@ -141,9 +141,7 @@ TEST_CASE("can replace filenames", "[NativeTracer]") {
 TEST_CASE("can catch signals", "[NativeTracer]") {
   const auto start = []() {
     std::this_thread::sleep_for(30ms);
-    // Intentional bug
-    int *p = nullptr;
-    int i = *p;
+    std::raise(SIGABRT);
   };
   NativeTracer tracer;
   tracer.fork(start, false);
