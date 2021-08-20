@@ -133,4 +133,10 @@ void record(const options &opts) {
   std::ofstream filesOut{opts.output() / kFilesConfigName};
   filesOut << files.dump(4);
   filesOut.close();
+
+  int code = tracer.wait();
+
+  if (code != 0)
+    throw std::runtime_error("Child application exited with code " +
+                             std::to_string(code));
 }

@@ -1,5 +1,6 @@
 #include "utils/Tracer.hpp"
 
+#include <cstdlib>
 #include <cstring>
 #include <errno.h>
 #include <iostream>
@@ -14,6 +15,58 @@
 #include <syscall.h>
 #include <thread>
 #include <unistd.h>
+
+class WaitResult {
+public:
+  enum class ResultType { success, signal, fail, exited };
+  WaitResult(ResultType type, int code) : mType(type), mCode(code) {}
+
+  operator bool() const noexcept { return mType == ResultType::success; }
+
+  ResultType getType() const noexcept { return mType; }
+
+  int getCode() const noexcept { return mCode; }
+
+private:
+  ResultType mType;
+  int mCode;
+};
+
+static WaitResult wait(pid_t pid) {
+  int status = 0;
+  pid_t res = waitpid(pid, &status, __WALL);
+  if (res == -1)
+    return {WaitResult::ResultType::fail, 0};
+
+  if (WIFEXITED(status)) {
+    return {WaitResult::ResultType::exited, WEXITSTATUS(status)};
+  }
+
+  if (WIFSIGNALED(status)) {
+    return {WaitResult::ResultType::signal, WTERMSIG(status)};
+  }
+
+  if (WIFSTOPPED(status)) {
+    int signal = WSTOPSIG(status);
+    switch (signal) {
+    case SIGTERM:
+    case SIGSEGV:
+    case SIGINT:
+    case SIGILL:
+    case SIGABRT:
+    case SIGFPE:
+      return {WaitResult::ResultType::signal, signal};
+    default:
+      return {WaitResult::ResultType::success, 0};
+    }
+  }
+
+  if (WIFCONTINUED(status)) {
+    return {WaitResult::ResultType::success, 0};
+  }
+
+  return {WaitResult::ResultType::fail, 0};
+}
 
 static void traceMe() { ptrace(PTRACE_TRACEME, 0, 0, 0); }
 
@@ -187,16 +240,28 @@ public:
     } else {
       if (!initialSuspend && ptrace(PTRACE_ATTACH, pidValue, 0, 0) != 0)
         throw std::runtime_error("Failed to attach");
-      if (waitpid(pidValue, 0, __WALL) == -1)
-        throw std::runtime_error(strerror(errno));
+      if (auto res = ::wait(pidValue); res != true) {
+        if (res.getType() == WaitResult::ResultType::fail)
+          throw std::runtime_error(strerror(errno));
+        else {
+          mExitCode = res.getCode();
+          return;
+        }
+      }
       ptrace(PTRACE_SETOPTIONS, pidValue, 0, PTRACE_O_TRACESYSGOOD);
       ptrace(PTRACE_SETOPTIONS, pidValue, 0, PTRACE_O_EXITKILL);
 
       while (true) {
         if (ptrace(PTRACE_SYSCALL, pidValue, 0, 0) == -1)
           break;
-        if (waitpid(pidValue, 0, __WALL) == -1)
-          throw std::runtime_error(strerror(errno));
+        if (auto res = ::wait(pidValue); res != true) {
+          if (res.getType() == WaitResult::ResultType::fail)
+            throw std::runtime_error(strerror(errno));
+          else {
+            mExitCode = res.getCode();
+            return;
+          }
+        }
 
         struct user_regs_struct regs;
         if (ptrace(PTRACE_GETREGS, pidValue, 0, &regs) == -1)
@@ -228,8 +293,14 @@ public:
         }
         if (ptrace(PTRACE_SYSCALL, pidValue, 0, 0) == -1)
           throw std::runtime_error(strerror(errno));
-        if (waitpid(pidValue, 0, __WALL) == -1)
-          throw std::runtime_error(strerror(errno));
+        if (auto res = ::wait(pidValue); res != true) {
+          if (res.getType() == WaitResult::ResultType::fail)
+            throw std::runtime_error(strerror(errno));
+          else {
+            mExitCode = res.getCode();
+            return;
+          }
+        }
         if (ptrace(PTRACE_GETREGS, pidValue, 0, &regs) == -1) {
           if (errno == ESRCH)
             break;
@@ -244,12 +315,12 @@ public:
   }
   void onStat(NativeTracer::onStatHandler handler) { mStatHandler = handler; }
 
-  void wait() {
-  }
+  int wait() { return mExitCode; }
   void kill() {}
   void interrupt() {}
 
 private:
+  int mExitCode = 0;
   NativeTracer::onFileOpenHandler mOpenFileHandler = [](std::string_view,
                                                         const OpenHandler &) {};
   NativeTracer::onStatHandler mStatHandler = [](std::string_view,
@@ -278,7 +349,7 @@ void NativeTracer::onStat(NativeTracer::onStatHandler handler) {
   mImpl->onStat(handler);
 }
 
-void NativeTracer::wait() { mImpl->wait(); }
+int NativeTracer::wait() { return mImpl->wait(); }
 void NativeTracer::kill() { mImpl->kill(); }
 void NativeTracer::interrupt() { mImpl->interrupt(); }
 } // namespace dpcpp_trace
