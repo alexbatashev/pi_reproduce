@@ -7,7 +7,9 @@
 #include "lldb/Initialization/SystemInitializerCommon.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/ProcessTrace.h"
+#include "lldb/Target/RegisterContext.h"
 #include "llvm/Support/TargetSelect.h"
+#include <lldb/Utility/RegisterValue.h>
 
 #define LLDB_PLUGIN(p) LLDB_PLUGIN_DECLARE(p)
 #include "LLDBPlugins.def"
@@ -74,7 +76,8 @@ void HostDebugger::launch(std::string_view executable,
     std::terminate();
   }
   ProcessLaunchInfo launchInfo;
-  launchInfo.SetExecutableFile(FileSpec(executable.data()), false);
+  FileSpec execFileSpec(executable.data());
+  launchInfo.SetExecutableFile(execFileSpec, false);
   launchInfo.GetFlags().Set(eLaunchFlagDebug);
   launchInfo.SetLaunchInSeparateProcessGroup(true);
 
@@ -105,11 +108,52 @@ void HostDebugger::launch(std::string_view executable,
   if (Module *exeModule = mTarget->GetExecutableModulePointer())
     launchInfo.SetExecutableFile(exeModule->GetPlatformFileSpec(), true);
 
+  auto ep = mTarget->GetEntryPointAddress();
+  if (!ep) {
+    std::cerr << "Failed to get entry point in executable\n";
+    std::terminate();
+  }
+
+  mStartBP = mTarget->CreateAddressInModuleBreakpoint(
+      ep->GetFileAddress(), true, &execFileSpec, false);
+
   error = mTarget->Launch(launchInfo, nullptr);
   if (error.Fail()) {
     std::cerr << error.AsCString() << std::endl;
     std::terminate();
   }
+}
+
+std::vector<uint8_t> HostDebugger::getRegistersData(size_t threadId) {
+  auto thread =
+      mTarget->GetProcessSP()->GetThreadList().GetThreadAtIndex(threadId);
+  auto regContext = thread->GetRegisterContext();
+
+  std::vector<uint8_t> buffer;
+
+  for (uint32_t regNum = 0; regNum < regContext->GetRegisterCount(); regNum++) {
+    const RegisterInfo *regInfo = regContext->GetRegisterInfoAtIndex(regNum);
+    if (regInfo == nullptr) {
+      std::cerr << "Failed to get register info\n";
+      std::terminate();
+    }
+    if (regInfo->value_regs != nullptr)
+      continue; // skip registers that are contained in other registers
+    RegisterValue regValue;
+    bool success = regContext->ReadRegister(regInfo, regValue);
+    if (!success) {
+      std::cerr << "Failed to read register #" << regNum << "\n";
+      std::terminate();
+    }
+
+    if (regInfo->byte_offset + regInfo->byte_size >= buffer.size())
+      buffer.resize(regInfo->byte_offset + regInfo->byte_size);
+
+    memcpy(buffer.data() + regInfo->byte_offset, regValue.GetBytes(),
+           regInfo->byte_size);
+  }
+
+  return buffer;
 }
 
 void HostDebugger::attach(uint64_t pid) {}
@@ -128,3 +172,16 @@ int HostDebugger::wait() {
 }
 void HostDebugger::kill() {}
 void HostDebugger::interrupt() {}
+
+bool HostDebugger::isAttached() { return mTarget != nullptr; }
+
+void *HostDebugger::cast(size_t type) {
+  if (type == DebuggerRTTI::getID()) {
+    return static_cast<dpcpp_trace::AbstractDebugger *>(this);
+  } else if (type == TracerRTTI::getID()) {
+    return static_cast<dpcpp_trace::Tracer *>(this);
+  } else if (type == ThisRTTI::getID()) {
+    return this;
+  }
+  return nullptr;
+}

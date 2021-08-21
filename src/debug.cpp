@@ -4,6 +4,7 @@
 #include "utils.hpp"
 
 #include "debug/AbstractDebugger.hpp"
+#include "debug_server/GDBServerProtocol.hpp"
 #include "debug_server/server.hpp"
 #include "utils/Tracer.hpp"
 
@@ -24,7 +25,7 @@ using json = nlohmann::json;
 using namespace dpcpp_trace;
 
 void debug(const options &opts) {
-  DebugServer server;
+  DebugServer server(gdb_server_tag{});
   std::string hostDebuggerLib =
       (opts.location() / ".." / "lib" / "libhost_debugger.so").string();
   void *hostDebuggerHandle = dlopen(hostDebuggerLib.c_str(), RTLD_NOW);
@@ -40,11 +41,14 @@ void debug(const options &opts) {
       hostDebuggerInfo.debugger, [hostDebuggerInfo](AbstractDebugger *d) {
         hostDebuggerInfo.deinitialize(d);
       });
+  std::cout << "Is attached 1 = " << hostDebuggerAbs->isAttached() << "\n";
 
   server.addDebugger(hostDebuggerAbs);
+  std::cout << "Is attached 2 = " << hostDebuggerAbs->isAttached() << "\n";
 
-  // TODO find a better way, since LLVM does not support RTTI by default
-  auto hostTracer = std::reinterpret_pointer_cast<Tracer>(hostDebuggerAbs);
+  auto &hostTracer = *dyn_cast<Tracer>(hostDebuggerAbs.get());
+
+  std::cout << "Is attached 3 = " << hostDebuggerAbs->isAttached() << "\n";
 
   std::filesystem::path tracePath;
   bool hasCLI = true;
@@ -173,7 +177,9 @@ void debug(const options &opts) {
   env.push_back(fullLDPath);
   env.push_back(outPath);
 
-  hostTracer->launch(executable, execArgs, env);
+  std::cout << "Is attached 4 = " << hostDebuggerAbs->isAttached() << "\n";
+  hostTracer.launch(executable, execArgs, env);
+  // std::cout << "Is attached 5 = " << hostDebuggerAbs->isAttached() << "\n";
 
   std::cout << "Starting server on localhost:1111\n";
   server.run();

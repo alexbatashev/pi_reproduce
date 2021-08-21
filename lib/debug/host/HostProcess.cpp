@@ -1,7 +1,10 @@
 #include "HostProcess.hpp"
+#include "HostThread.hpp"
 
+#include <lldb/Core/Debugger.h>
 #include <lldb/Core/PluginManager.h>
 #include <lldb/Host/MainLoop.h>
+#include <lldb/Interpreter/CommandObjectMultiword.h>
 
 #include <memory>
 
@@ -114,8 +117,12 @@ bool HostProcess::CanDebug(lldb::TargetSP, bool pluginSpecifiedByName) {
 }
 
 CommandObject *HostProcess::GetPluginCommandObject() {
-  // TODO implement
-  return nullptr;
+  if (!mCommandObject) {
+    mCommandObject = std::make_shared<CommandObjectMultiword>(
+        GetTarget().GetDebugger().GetCommandInterpreter(),
+        "host process plugin");
+  }
+  return mCommandObject.get();
 }
 
 Status HostProcess::WillLaunch(Module *module) {
@@ -142,15 +149,41 @@ void HostProcess::DidLaunch() {
   // NOP
 }
 
-Status HostProcess::DoDestroy() {}
+Status HostProcess::DoDestroy() {
+  // NOP for now
+  return Status();
+}
 
 void HostProcess::RefreshStateAfterStop() {}
 
 size_t HostProcess::DoReadMemory(lldb::addr_t addr, void *buf, size_t size,
-                                 Status &error) {}
+                                 Status &error) {
+  size_t bytesRead;
+  error = mProcess->ReadMemory(addr, buf, size, bytesRead);
 
-bool HostProcess::DoUpdateThreadList(ThreadList &old_thread_list,
-                                     ThreadList &new_thread_list) {}
+  return bytesRead;
+}
+
+bool HostProcess::DoUpdateThreadList(ThreadList &oldThreadList,
+                                     ThreadList &newThreadList) {
+  size_t newThreadCount = mProcess->UpdateThreads();
+  if (newThreadCount == 0)
+    return false;
+
+  ThreadList oldListCopy(oldThreadList);
+  for (size_t i = 0; i < newThreadCount; i++) {
+    auto *nativeThread = mProcess->GetThreadAtIndex(i);
+    auto tid = nativeThread->GetID();
+    ThreadSP thread(oldListCopy.RemoveThreadByProtocolID(tid, false));
+    if (!thread) {
+      thread = std::make_shared<HostThread>(*this, tid, nativeThread);
+    }
+
+    newThreadList.AddThreadSortedByIndexID(thread);
+  }
+
+  return true;
+}
 
 HostProcess::~HostProcess() {}
 
