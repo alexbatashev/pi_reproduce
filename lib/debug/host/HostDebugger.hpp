@@ -32,6 +32,8 @@ public:
   void launch(std::string_view executable, std::span<std::string> args,
               std::span<std::string> env) final;
 
+  std::vector<uint8_t> getRegistersData(size_t threadId) final;
+
   void onFileOpen(dpcpp_trace::Tracer::onFileOpenHandler handler) final{};
   void onStat(dpcpp_trace::Tracer::onStatHandler handler) final{};
 
@@ -46,5 +48,6 @@ public:
 private:
   lldb::DebuggerSP mDebugger;
   lldb::TargetSP mTarget;
+  lldb::BreakpointSP mStartBP;
   lldb::ModuleSP mModule;
 };

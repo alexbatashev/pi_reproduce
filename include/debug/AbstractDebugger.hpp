@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <vector>
 
 namespace dpcpp_trace {
 class AbstractDebugger;
@@ -24,6 +25,8 @@ public:
       static_cast<size_t>(RTTIHierarchy::AbstractDebugger);
 
   virtual ~AbstractDebugger() = default;
+
+  virtual std::vector<uint8_t> getRegistersData(size_t threadId) = 0;
 
   virtual void attach(uint64_t pid) = 0;
   virtual bool isAttached() = 0;

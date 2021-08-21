@@ -20,7 +20,16 @@ public:
 private:
   std::string process_qSupported(std::string_view packet);
   std::string process_qAttached(std::string_view packet);
+  std::string process_QStartNoAckMode(std::string_view packet);
+  std::string process_g(std::string_view packet);
+  std::string process_H(std::string_view packet);
+  std::string processStatus(std::string_view packet);
   std::string processUnsupported(std::string_view packet);
+  std::string processAck(std::string_view packet);
+
+  bool mAck = true;
+
+  size_t mCurrentThreadIndex = 0;
 
   DebugServer &mServer;
 };

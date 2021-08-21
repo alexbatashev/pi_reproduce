@@ -1,5 +1,7 @@
 #pragma once
 
+#include "HostRegisterContext.hpp"
+
 #include <lldb/Target/Thread.h>
 
 using namespace lldb_private;
@@ -13,14 +15,23 @@ public:
 
   void RefreshStateAfterStop() final {}
 
-  RegisterContextSP GetRegisterContext() final { return nullptr; }
+  RegisterContextSP GetRegisterContext() final {
+    if (!mRegContext)
+      mRegContext = CreateRegisterContextForFrame(nullptr);
+    return mRegContext;
+  }
 
   RegisterContextSP CreateRegisterContextForFrame(StackFrame *frame) final {
-    return nullptr;
+    uint32_t concreteFrameIdx = 0;
+
+    // TODO support other cases
+    return std::make_shared<HostRegisterContext>(*this, concreteFrameIdx,
+                                                 mThread->GetRegisterContext());
   }
   bool CalculateStopInfo() final { return false; }
 
 private:
   NativeThreadProtocol *mThread;
+  RegisterContextSP mRegContext;
 };
 } // namespace dpcpp_trace
