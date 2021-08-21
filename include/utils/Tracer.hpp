@@ -39,6 +39,7 @@ public:
 
   virtual ~Tracer() = default;
 
+  virtual void start() = 0;
   virtual int wait() = 0;
   virtual void kill() = 0;
   virtual void interrupt() = 0;
@@ -64,6 +65,7 @@ public:
   void onFileOpen(onFileOpenHandler) final;
   void onStat(onStatHandler) final;
 
+  void start() final;
   int wait() final;
   void kill() final;
   void interrupt() final;

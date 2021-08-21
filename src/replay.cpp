@@ -195,5 +195,6 @@ void replay(const options &opts) {
   }
 
   tracer.launch(executable, execArgs, env);
+  tracer.start();
   tracer.wait();
 }

@@ -6,6 +6,7 @@
 #include <iostream>
 #include <linux/limits.h>
 #include <stdexcept>
+#include <stop_token>
 #include <sys/ptrace.h>
 #include <sys/reg.h>
 #include <sys/syscall.h>
@@ -68,7 +69,7 @@ static WaitResult wait(pid_t pid) {
   return {WaitResult::ResultType::fail, 0};
 }
 
-static void traceMe() { ptrace(PTRACE_TRACEME, 0, 0, 0); }
+static void traceMe(bool hardStop = false) { ptrace(PTRACE_TRACEME, 0, 0, 0); }
 
 static std::string readString(pid_t pid, std::uintptr_t addr) {
   constexpr size_t longSize = sizeof(long);
@@ -238,8 +239,9 @@ public:
       child();
       exit(0);
     } else {
-      if (!initialSuspend && ptrace(PTRACE_ATTACH, pidValue, 0, 0) != 0)
-        throw std::runtime_error("Failed to attach");
+      if (!initialSuspend && ptrace(PTRACE_ATTACH, pidValue, 0, 0) == -1) {
+        throw std::runtime_error("Failed to attach to process");
+      }
       if (auto res = ::wait(pidValue); res != true) {
         if (res.getType() == WaitResult::ResultType::fail)
           throw std::runtime_error(strerror(errno));
@@ -248,66 +250,81 @@ public:
           return;
         }
       }
-      ptrace(PTRACE_SETOPTIONS, pidValue, 0, PTRACE_O_TRACESYSGOOD);
-      ptrace(PTRACE_SETOPTIONS, pidValue, 0, PTRACE_O_EXITKILL);
+      mWorker = [=, this](std::stop_token) {
+        ptrace(PTRACE_SETOPTIONS, pidValue, 0, PTRACE_O_TRACESYSGOOD);
+        ptrace(PTRACE_SETOPTIONS, pidValue, 0, PTRACE_O_EXITKILL);
 
-      while (true) {
-        if (ptrace(PTRACE_SYSCALL, pidValue, 0, 0) == -1)
-          break;
-        if (auto res = ::wait(pidValue); res != true) {
-          if (res.getType() == WaitResult::ResultType::fail)
-            throw std::runtime_error(strerror(errno));
-          else {
-            mExitCode = res.getCode();
-            return;
-          }
-        }
+        bool needsContinue = !initialSuspend;
 
-        struct user_regs_struct regs;
-        if (ptrace(PTRACE_GETREGS, pidValue, 0, &regs) == -1)
-          throw std::runtime_error(strerror(errno));
-
-        const long syscall = regs.orig_rax;
-
-        switch (syscall) {
-        case SYS_stat: {
-          StatHandlerImpl handler{pidValue, sizeof(long) * RDI};
-          std::string filename = readString(pidValue, regs.rdi);
-          mStatHandler(filename, handler);
-          break;
-        }
-        case SYS_newfstatat: {
-          StatHandlerImpl handler{pidValue, sizeof(long) * RSI};
-          std::string filename = readString(pidValue, regs.rsi);
-          mStatHandler(filename, handler);
-          break;
-        }
-        case SYS_openat: {
-          OpenHandlerImpl handler{pidValue, sizeof(long) * RSI};
-          std::string filename = readString(pidValue, regs.rsi);
-          mOpenFileHandler(filename, handler);
-          break;
-        }
-        default:
-          break;
-        }
-        if (ptrace(PTRACE_SYSCALL, pidValue, 0, 0) == -1)
-          throw std::runtime_error(strerror(errno));
-        if (auto res = ::wait(pidValue); res != true) {
-          if (res.getType() == WaitResult::ResultType::fail)
-            throw std::runtime_error(strerror(errno));
-          else {
-            mExitCode = res.getCode();
-            return;
-          }
-        }
-        if (ptrace(PTRACE_GETREGS, pidValue, 0, &regs) == -1) {
-          if (errno == ESRCH)
+        while (true) {
+          if (ptrace(PTRACE_SYSCALL, pidValue, 0, 0) == -1)
             break;
-          throw std::runtime_error(strerror(errno));
+          if (needsContinue) {
+            // ptrace(PTRACE_CONT, pidValue, 0, 0);
+            needsContinue = false;
+          }
+          if (auto res = ::wait(pidValue); res != true) {
+            if (res.getType() == WaitResult::ResultType::fail)
+              throw std::runtime_error(strerror(errno));
+            else {
+              mExitCode = res.getCode();
+              return;
+            }
+          }
+
+          struct user_regs_struct regs;
+          if (ptrace(PTRACE_GETREGS, pidValue, 0, &regs) == -1)
+            throw std::runtime_error(strerror(errno));
+
+          const long syscall = regs.orig_rax;
+
+          switch (syscall) {
+          case SYS_stat: {
+            StatHandlerImpl handler{pidValue, sizeof(long) * RDI};
+            std::string filename = readString(pidValue, regs.rdi);
+            mStatHandler(filename, handler);
+            break;
+          }
+          case SYS_newfstatat: {
+            StatHandlerImpl handler{pidValue, sizeof(long) * RSI};
+            std::string filename = readString(pidValue, regs.rsi);
+            mStatHandler(filename, handler);
+            break;
+          }
+          case SYS_openat: {
+            OpenHandlerImpl handler{pidValue, sizeof(long) * RSI};
+            std::string filename = readString(pidValue, regs.rsi);
+            mOpenFileHandler(filename, handler);
+            break;
+          }
+          default:
+            break;
+          }
+          if (ptrace(PTRACE_SYSCALL, pidValue, 0, 0) == -1)
+            throw std::runtime_error(strerror(errno));
+          if (auto res = ::wait(pidValue); res != true) {
+            if (res.getType() == WaitResult::ResultType::fail)
+              throw std::runtime_error(strerror(errno));
+            else {
+              mExitCode = res.getCode();
+              return;
+            }
+          }
+          if (ptrace(PTRACE_GETREGS, pidValue, 0, &regs) == -1) {
+            if (errno == ESRCH)
+              break;
+            throw std::runtime_error(strerror(errno));
+          }
         }
-      }
+      };
     }
+  }
+
+  void start() {
+    std::stop_token t;
+    if (mWorker)
+      mWorker(t);
+    // mThread = std::jthread(mWorker);
   }
 
   void onFileOpen(NativeTracer::onFileOpenHandler handler) {
@@ -315,7 +332,11 @@ public:
   }
   void onStat(NativeTracer::onStatHandler handler) { mStatHandler = handler; }
 
-  int wait() { return mExitCode; }
+  int wait() {
+    // if (mThread.joinable())
+    //  mThread.join();
+    return mExitCode;
+  }
   void kill() {}
   void interrupt() {}
 
@@ -325,6 +346,9 @@ private:
                                                         const OpenHandler &) {};
   NativeTracer::onStatHandler mStatHandler = [](std::string_view,
                                                 const StatHandler &) {};
+
+  std::function<void(std::stop_token)> mWorker;
+  std::jthread mThread;
 };
 } // namespace detail
 
@@ -349,6 +373,7 @@ void NativeTracer::onStat(NativeTracer::onStatHandler handler) {
   mImpl->onStat(handler);
 }
 
+void NativeTracer::start() { return mImpl->start(); }
 int NativeTracer::wait() { return mImpl->wait(); }
 void NativeTracer::kill() { mImpl->kill(); }
 void NativeTracer::interrupt() { mImpl->interrupt(); }

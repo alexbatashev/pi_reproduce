@@ -39,7 +39,7 @@ public:
 
   bool isAttached() final;
 
-
+  void start() final;
   int wait() final;
   void kill() final;
   void interrupt() final;

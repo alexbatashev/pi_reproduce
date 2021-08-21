@@ -30,6 +30,7 @@ TEST_CASE("can fork processes", "[NativeTracer]") {
 
   NativeTracer tracer;
   tracer.fork(start, false);
+  tracer.start();
   tracer.wait();
 
   std::ifstream is{fs::temp_directory_path() / kForkTestFilename};
@@ -57,6 +58,7 @@ TEST_CASE("can trace files being open", "[NativeTracer]") {
       test = true;
   });
   tracer.fork(start, false);
+  tracer.start();
   tracer.wait();
 
   std::ifstream is{fs::temp_directory_path() / kOpenTestFilename};
@@ -86,6 +88,7 @@ TEST_CASE("can trace files being stat", "[NativeTracer]") {
       test = true;
   });
   tracer.fork(start, false);
+  tracer.start();
   tracer.wait();
 
   std::ifstream is{fs::temp_directory_path() / kStatTestFilename};
@@ -119,6 +122,7 @@ TEST_CASE("can replace filenames", "[NativeTracer]") {
     }
   });
   tracer.fork(start, false);
+  tracer.start();
   tracer.wait();
 
   std::ifstream is1{fs::temp_directory_path() / kReplaceTestFilename1};
@@ -145,6 +149,7 @@ TEST_CASE("can catch signals", "[NativeTracer]") {
   };
   NativeTracer tracer;
   tracer.fork(start, false);
+  tracer.start();
   int result = tracer.wait();
 
   REQUIRE(result != 0);
@@ -157,6 +162,7 @@ TEST_CASE("can capture exit code", "[NativeTracer]") {
   };
   NativeTracer tracer;
   tracer.fork(start, false);
+  tracer.start();
   int result = tracer.wait();
 
   REQUIRE(result == 42);
