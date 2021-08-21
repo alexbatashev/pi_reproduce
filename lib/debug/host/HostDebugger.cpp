@@ -170,6 +170,7 @@ int HostDebugger::wait() {
   } while (type != eStateExited || type != eStateCrashed);
   return 0;
 }
+void HostDebugger::start() {}
 void HostDebugger::kill() {}
 void HostDebugger::interrupt() {}
 
