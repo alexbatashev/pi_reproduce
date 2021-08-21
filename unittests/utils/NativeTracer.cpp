@@ -137,3 +137,27 @@ TEST_CASE("can replace filenames", "[NativeTracer]") {
   REQUIRE(k == 42);
   REQUIRE(n == 10);
 }
+
+TEST_CASE("can catch signals", "[NativeTracer]") {
+  const auto start = []() {
+    std::this_thread::sleep_for(30ms);
+    std::raise(SIGABRT);
+  };
+  NativeTracer tracer;
+  tracer.fork(start, false);
+  int result = tracer.wait();
+
+  REQUIRE(result != 0);
+}
+
+TEST_CASE("can capture exit code", "[NativeTracer]") {
+  const auto start = []() {
+    std::this_thread::sleep_for(30ms);
+    exit(42);
+  };
+  NativeTracer tracer;
+  tracer.fork(start, false);
+  int result = tracer.wait();
+
+  REQUIRE(result == 42);
+}
