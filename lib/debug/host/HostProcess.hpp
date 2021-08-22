@@ -7,6 +7,7 @@
 
 #include <lldb/lldb-private-forward.h>
 
+#include <functional>
 #include <thread>
 
 namespace dpcpp_trace {
@@ -43,14 +44,22 @@ public:
   lldb_private::Status DoDestroy() override;
   void RefreshStateAfterStop() override;
 
-  size_t DoReadMemory(lldb::addr_t addr, void *buf, size_t size,
-                      lldb_private::Status &error) override;
-
-  bool DoUpdateThreadList(lldb_private::ThreadList &old_thread_list,
-                          lldb_private::ThreadList &new_thread_list) override;
-
   lldb_private::ConstString GetPluginName() override;
   uint32_t GetPluginVersion() override;
+
+  lldb_private::DataExtractor GetAuxvData() override;
+
+  void OnProcessStateChanged(lldb::StateType type);
+  void NotifySignal();
+
+  void OnDebuggerConnect(lldb_private::NativeProcessProtocol *proc);
+
+protected:
+  size_t DoReadMemory(lldb::addr_t addr, void *buf, size_t size,
+                      lldb_private::Status &error) override;
+  bool DoUpdateThreadList(lldb_private::ThreadList &old_thread_list,
+                          lldb_private::ThreadList &new_thread_list) override;
+  lldb_private::Status DoResume() override;
 
 private:
   std::jthread mWorker;

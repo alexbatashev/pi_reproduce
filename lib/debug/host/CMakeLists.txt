@@ -1,6 +1,7 @@
 add_dpcpp_trace_library(host_debugger SHARED
   HostDebugger.cpp
   HostProcess.cpp
+  HostPlatform.cpp
   )
 
 target_include_directories(host_debugger PRIVATE
@@ -183,5 +184,7 @@ ${LIBEDIT_LIBRARY}
 ${LIBPANEL_LIBRARY}
 
 -Wl,--end-group
+CONAN_PKG::fmt
+CONAN_PKG::cpuinfo
 )
 
