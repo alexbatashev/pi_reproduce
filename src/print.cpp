@@ -1,3 +1,5 @@
+import std;
+
 #include "common.hpp"
 #include "constants.hpp"
 #include "device_binary.pb.h"
@@ -8,15 +10,10 @@
 #include <CL/sycl/detail/pi.h>
 #include <fmt/core.h>
 
-#include <array>
 #include <cstdint>
 #include <cstring>
-#include <filesystem>
 #include <fstream>
-#include <iostream>
 #include <map>
-#include <string>
-#include <vector>
 
 template <typename DstT, typename SrcT>
 DstT offset_cast(size_t offset, SrcT *ptr) {

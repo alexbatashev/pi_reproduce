@@ -18,6 +18,7 @@ macro(set_dpcpp_trace_common_options target_name)
     RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin
     INSTALL_RPATH "../lib"
     )
+  target_compile_options(${target_name} PRIVATE -fmodules-ts -fmodule-mapper=${PROJECT_BINARY_DIR}/modules.map)
 
   if (DPCPP_TRACE_LINK_STATICALLY)
     if (NOT WIN32)
@@ -43,4 +44,16 @@ function(add_dpcpp_trace_executable target_name)
   add_executable(${target_name} ${ARGN})
 
   set_dpcpp_trace_common_options(${target_name})
+endfunction()
+
+function(add_dpcpp_trace_module target_name)
+add_custom_target(${target_name}
+  ${CMAKE_CXX_COMPILER} -std=c++20 -fmodules-ts -fmodule-only
+  ${ARGN}
+)
+file(APPEND ${PROJECT_BINARY_DIR}/modules.map "${target_name} ${CMAKE_CURRENT_BINARY_DIR}/gcm.cache/${target_name}.gcm")
+endfunction()
+
+function(target_link_dpcpp_trace_module target_name module_name)
+add_dependencies(${target_name} ${module_name})
 endfunction()
