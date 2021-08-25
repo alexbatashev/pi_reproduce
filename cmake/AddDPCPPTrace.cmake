@@ -48,7 +48,7 @@ endfunction()
 
 function(add_dpcpp_trace_module target_name)
 add_custom_target(${target_name}
-  ${CMAKE_CXX_COMPILER} -std=c++20 -fmodules-ts -fmodule-only
+  ${CMAKE_CXX_COMPILER} -std=c++20 -fmodules-ts -fmodule-only -c
   ${ARGN}
 )
 file(APPEND ${PROJECT_BINARY_DIR}/modules.map "${target_name} ${CMAKE_CURRENT_BINARY_DIR}/gcm.cache/${target_name}.gcm")
