@@ -1,4 +1,4 @@
 {
   "name": "dpcpp_trace dev env",
-  "image": "ghcr.io/alexbatashev/dpcpp_trace:6be11fb95bce80335bcda34a0a63d3893a16ba2e"
+  "image": "ghcr.io/alexbatashev/dpcpp_trace:b1624f4ad7410aac86c8b06a0e0f5effd58b184f"
 }
