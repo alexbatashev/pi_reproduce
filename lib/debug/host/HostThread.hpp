@@ -2,6 +2,7 @@
 
 #include "HostRegisterContext.hpp"
 
+#include <lldb/Target/StopInfo.h>
 #include <lldb/Target/Thread.h>
 
 using namespace lldb_private;
@@ -28,7 +29,33 @@ public:
     return std::make_shared<HostRegisterContext>(*this, concreteFrameIdx,
                                                  mThread->GetRegisterContext());
   }
-  bool CalculateStopInfo() final { return false; }
+
+  bool CalculateStopInfo() final {
+    ThreadStopInfo info;
+    std::string description;
+
+    if (!mThread->GetStopReason(info, description))
+      return false;
+
+    if (info.reason == eStopReasonSignal) {
+      SetStopInfo(StopInfo::CreateStopReasonWithSignal(
+          *this, info.details.signal.signo, description.c_str()));
+      return true;
+    } else if (info.reason == eStopReasonException) {
+      SetStopInfo(
+          StopInfo::CreateStopReasonWithException(*this, description.c_str()));
+      return true;
+    }
+    return false;
+  }
+
+  int GetUnixSignal() {
+    ThreadStopInfo info;
+    std::string descr;
+    mThread->GetStopReason(info, descr);
+
+    return info.details.signal.signo;
+  }
 
 private:
   NativeThreadProtocol *mThread;

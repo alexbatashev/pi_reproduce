@@ -39,16 +39,35 @@ public:
 
   bool isAttached() final;
 
+  std::string getGDBTargetXML() final;
+  std::string getExecutablePath() final;
+
+  void CreateSWBreakpoint(uint64_t address) final;
+  void resume(int signal, uint64_t tid) final;
+
   void start() final;
   int wait() final;
   void kill() final;
   void interrupt() final;
+
+  dpcpp_trace::StopReason getStopReason(size_t threadId);
+
+  size_t getNumThreads() final;
+  uint64_t getThreadIDAtIndex(size_t threadIdx) final;
+
+  std::vector<uint8_t> readMemory(uint64_t addr, size_t len) final;
+
+  std::vector<uint8_t> getAuxvData() final;
 
   void *cast(std::size_t type) override;
 
 private:
   lldb::DebuggerSP mDebugger;
   lldb::TargetSP mTarget;
+  lldb::ProcessSP mProcess;
   lldb::BreakpointSP mStartBP;
   lldb::ModuleSP mModule;
+
+  std::string mTargetXML;
+  std::string mExecutablePath;
 };

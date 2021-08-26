@@ -1,11 +1,13 @@
 #include "HostProcess.hpp"
 #include "HostThread.hpp"
 
+#include <exception>
 #include <lldb/Core/Debugger.h>
 #include <lldb/Core/PluginManager.h>
 #include <lldb/Host/MainLoop.h>
 #include <lldb/Interpreter/CommandObjectMultiword.h>
 
+#include <iostream>
 #include <memory>
 
 #if defined(__linux__)
@@ -32,18 +34,29 @@ namespace dpcpp_trace {
 class HostDelegate
     : public lldb_private::NativeProcessProtocol::NativeDelegate {
 public:
+  HostDelegate(std::shared_ptr<HostProcess> proc) : mProcess(std::move(proc)) {}
   ~HostDelegate() final = default;
 
   void InitializeDelegate(lldb_private::NativeProcessProtocol *process) final {}
 
   void ProcessStateChanged(lldb_private::NativeProcessProtocol *process,
-                           lldb::StateType state) final {}
+                           lldb::StateType state) final {
+    std::cout << "Process state changed: " << state << "\n";
+    mProcess->OnProcessStateChanged(state);
+  }
 
-  void DidExec(lldb_private::NativeProcessProtocol *process) final {}
+  void DidExec(lldb_private::NativeProcessProtocol *process) final {
+    std::cout << "Did exec\n";
+  }
 
   void NewSubprocess(lldb_private::NativeProcessProtocol *parent_process,
                      std::unique_ptr<lldb_private::NativeProcessProtocol>
-                         child_process) final {}
+                         child_process) final {
+    std::cout << "new subprocess\n";
+  }
+
+private:
+  std::shared_ptr<HostProcess> mProcess;
 };
 
 class PluginProperties : public Properties {
@@ -131,16 +144,24 @@ Status HostProcess::WillLaunch(Module *module) {
 }
 
 Status HostProcess::DoLaunch(Module *exeModule, ProcessLaunchInfo &launchInfo) {
-  mDelegate = std::make_unique<HostDelegate>();
+  mDelegate = std::make_unique<HostDelegate>(
+      std::static_pointer_cast<HostProcess>(shared_from_this()));
   NativeProcessFactory factory;
   mMainLoop = std::make_shared<MainLoop>();
+
   auto procOrError = factory.Launch(launchInfo, *mDelegate, *mMainLoop);
   if (!procOrError)
     return Status("Failed to launch process %s", "todo proc name");
 
-  mWorker = std::jthread([this]() { mMainLoop->Run(); });
-
   mProcess = std::move(procOrError.get());
+  auto *nativeThread = mProcess->GetThreadAtIndex(0);
+  if (!nativeThread) {
+    std::cerr << "No main thread\n";
+    std::terminate();
+  }
+
+  SetID(mProcess->GetID());
+  SetPrivateState(mProcess->GetState());
 
   return Status();
 }
@@ -154,12 +175,14 @@ Status HostProcess::DoDestroy() {
   return Status();
 }
 
-void HostProcess::RefreshStateAfterStop() {}
+void HostProcess::RefreshStateAfterStop() {
+  SetPrivateState(mProcess->GetState());
+}
 
 size_t HostProcess::DoReadMemory(lldb::addr_t addr, void *buf, size_t size,
                                  Status &error) {
   size_t bytesRead;
-  error = mProcess->ReadMemory(addr, buf, size, bytesRead);
+  error = mProcess->ReadMemoryWithoutTrap(addr, buf, size, bytesRead);
 
   return bytesRead;
 }
@@ -191,5 +214,26 @@ lldb_private::ConstString HostProcess::GetPluginName() {
   return GetPluginNameStatic();
 }
 
+lldb_private::DataExtractor HostProcess::GetAuxvData() {
+  auto data = mProcess->GetAuxvData();
+  if (!data)
+    return {};
+
+  return lldb_private::DataExtractor((*data)->getBufferStart(),
+                                     (*data)->getBufferSize(), eByteOrderLittle,
+                                     sizeof(size_t));
+}
+
+Status HostProcess::DoResume() {
+  Status err = mProcess->Resume(ResumeActionList());
+  if (err.Fail())
+    return err;
+  SetPrivateState(eStateRunning);
+  return Status();
+}
+
+void HostProcess::OnProcessStateChanged(lldb::StateType type) {
+  SetPrivateState(type);
+}
 uint32_t HostProcess::GetPluginVersion() { return 0; }
 } // namespace dpcpp_trace

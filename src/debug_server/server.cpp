@@ -32,17 +32,18 @@ void DebugServer::run() {
     tcp::acceptor acceptor(executor, {tcp::v4(), mPort});
     tcp::socket socket = co_await acceptor.async_accept(use_awaitable);
 
-    std::array<char, 8192> buf;
+    std::array<char, 16384> buf;
 
     while (true) {
-      std::size_t n = co_await socket.async_read_some(boost::asio::buffer(buf), use_awaitable);
-      std::cout << "Got some data: \n";
+      std::size_t n = co_await socket.async_read_some(boost::asio::buffer(buf),
+                                                      use_awaitable);
       std::string_view message(buf.data(), n);
-      std::cout << message << std::endl;
       std::string response = mProtocol->processPacket(message);
-      std::cout << "Response: " << response << "\n";
       if (!response.empty())
-        co_await async_write(socket, boost::asio::buffer(response), use_awaitable);
+        co_await async_write(socket, boost::asio::buffer(response),
+                             use_awaitable);
+      fmt::print("-> {}\n", message);
+      fmt::print("<- {}\n", response);
     }
 
     co_return;
