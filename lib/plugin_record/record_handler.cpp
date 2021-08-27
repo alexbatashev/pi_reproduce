@@ -43,7 +43,7 @@ static void dumpBinaryDescriptor(pi_device_binary binary, pi_uint32 idx) {
 
   for (auto it = binary->EntriesBegin; it != binary->EntriesEnd; ++it) {
     auto &entry = *dump.add_offload_entries();
-    entry.set_address((uint64_t)it->addr);
+    entry.set_address(reinterpret_cast<uint64_t>(it->addr));
     entry.set_name(it->name);
     entry.set_size(it->size);
     entry.set_flags(it->flags);

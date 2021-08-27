@@ -218,7 +218,10 @@ options::options(int argc, char *argv[], char *env[]) {
   }
 
   std::array<char, 1024> buf;
-  readlink("/proc/self/exe", buf.data(), buf.size());
+  ssize_t res = readlink("/proc/self/exe", buf.data(), buf.size());
+  if (res == -1)
+    throw std::runtime_error("Failed to identify location");
+
   mExecutablePath = std::filesystem::path{buf.data()};
 
   std::string_view command(argv[1]);

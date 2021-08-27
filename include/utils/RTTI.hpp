@@ -16,6 +16,7 @@ template <typename T, typename U> T *dyn_cast(U *src) {
 
 struct RTTIRoot {
   virtual void *cast(std::size_t type) = 0;
+  virtual ~RTTIRoot() = default;
 };
 
 template <typename T> struct RTTIChild {

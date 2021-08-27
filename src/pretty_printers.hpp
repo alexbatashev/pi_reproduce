@@ -10,7 +10,7 @@
 #include <iostream>
 
 template <typename T> void printFormatted(T value) {
-  fmt::print("{:>15} : {:#x}\n", "<unknown>", (size_t)(value));
+  fmt::print("{:>15} : {:#x}\n", "<unknown>", value);
 }
 
 template <> void printFormatted<pi_queue_info>(pi_queue_info info) {

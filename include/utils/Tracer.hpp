@@ -15,11 +15,13 @@ class NativeTracerImpl;
 class OpenHandler {
 public:
   virtual void replaceFilename(std::string_view newFile) const = 0;
+  virtual ~OpenHandler() = default;
 };
 
 class StatHandler {
 public:
   virtual void replaceFilename(std::string_view newFile) const = 0;
+  virtual ~StatHandler() = default;
 };
 
 class Tracer : public RTTIRoot, public RTTIChild<Tracer> {
