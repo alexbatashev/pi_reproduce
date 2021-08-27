@@ -40,7 +40,7 @@ Buffer Compression::compress(const void *ptr, size_t size) {
 
   buf.resize(compSize);
 
-  return std::move(buf);
+  return buf;
 }
 
 Buffer Compression::uncompress(const void *ptr, size_t size) {
@@ -51,6 +51,6 @@ Buffer Compression::uncompress(const void *ptr, size_t size) {
       ZSTD_decompressDCtx(&mImpl->getDecRef(), buf.data(), maxSize, ptr, size);
   assert(maxSize == decSize);
 
-  return std::move(buf);
+  return buf;
 }
 } // namespace dpcpp_trace

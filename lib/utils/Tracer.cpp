@@ -106,36 +106,6 @@ static std::string readString(pid_t pid, std::uintptr_t addr) {
   return result;
 }
 
-static void redirect_file(pid_t child, const char *file, size_t rdi,
-                          size_t rsp) {
-  char *stack_addr, *file_addr;
-
-  stack_addr = (char *)ptrace(PTRACE_PEEKUSER, child, sizeof(long) * RSP, 0);
-  /* Move further of red zone and make sure we have space for the file name */
-  stack_addr -= 128 + PATH_MAX;
-  file_addr = stack_addr;
-
-  /* Write new file in lower part of the stack */
-  do {
-    int i;
-    char val[sizeof(long)];
-
-    for (i = 0; i < sizeof(long); ++i, ++file) {
-      val[i] = *file;
-      if (*file == '\0')
-        break;
-    }
-
-    if (ptrace(PTRACE_POKETEXT, child, stack_addr, *(long *)val) != 0) {
-      throw std::runtime_error("fail " + std::string(strerror(errno)));
-    }
-    stack_addr += sizeof(long);
-  } while (*file);
-
-  /* Change argument to open */
-  ptrace(PTRACE_POKEUSER, child, sizeof(long) * RSI, file_addr);
-}
-
 static void writeString(pid_t pid, std::uintptr_t reg, std::string_view str) {
   char *stackAddr, *fileAddr;
 
@@ -160,7 +130,7 @@ static void writeString(pid_t pid, std::uintptr_t reg, std::string_view str) {
       }
     }
 
-    if (ptrace(PTRACE_POKETEXT, pid, stackAddr, *(long *)buf) != 0) {
+    if (ptrace(PTRACE_POKETEXT, pid, stackAddr, *reinterpret_cast<long *>(buf)) != 0) {
       throw std::runtime_error("failed to poke data " +
                                std::string(strerror(errno)));
     }

@@ -52,10 +52,10 @@ XPTI_CALLBACK_API void xptiTraceInit(unsigned int major_version,
   if (std::string_view(stream_name) == kPIDebugStreamName) {
     GStreamID = xptiRegisterStream(stream_name);
     xptiRegisterCallback(
-        GStreamID, (uint16_t)xpti::trace_point_type_t::function_with_args_begin,
+        GStreamID, static_cast<uint16_t>(xpti::trace_point_type_t::function_with_args_begin),
         tpCallback);
     xptiRegisterCallback(
-        GStreamID, (uint16_t)xpti::trace_point_type_t::function_with_args_end,
+        GStreamID, static_cast<uint16_t>(xpti::trace_point_type_t::function_with_args_end),
         tpCallback);
 
     GStartTime = std::chrono::steady_clock::now();

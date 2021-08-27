@@ -40,10 +40,10 @@ XPTI_CALLBACK_API void xptiTraceInit(unsigned int major_version,
 
     // Register our lone callback to all pre-defined trace point types
     xptiRegisterCallback(
-        GStreamID, (uint16_t)xpti::trace_point_type_t::node_create, tpCallback);
+        GStreamID, static_cast<uint16_t>(xpti::trace_point_type_t::node_create), tpCallback);
     xptiRegisterCallback(
-        GStreamID, (uint16_t)xpti::trace_point_type_t::edge_create, tpCallback);
-    xptiRegisterCallback(GStreamID, (uint16_t)xpti::trace_point_type_t::signal,
+        GStreamID, static_cast<uint16_t>(xpti::trace_point_type_t::edge_create), tpCallback);
+    xptiRegisterCallback(GStreamID, static_cast<uint16_t>(xpti::trace_point_type_t::signal),
                          tpCallback);
   }
 }
