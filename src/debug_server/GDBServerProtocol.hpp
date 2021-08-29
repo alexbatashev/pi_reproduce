@@ -34,6 +34,8 @@ private:
   std::string process_vCont(std::string_view packet);
   std::string process_vFile(std::string_view packet);
   std::string process_c(std::string_view packet);
+  std::string process_p(std::string_view packet);
+  std::string process_qProcessInfo(std::string_view packet);
   std::string processStatus(std::string_view packet);
   std::string processUnsupported(std::string_view packet);
   std::string processAck(std::string_view packet);

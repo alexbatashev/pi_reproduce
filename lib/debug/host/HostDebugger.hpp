@@ -34,6 +34,7 @@ public:
 
   std::vector<uint8_t> getRegistersData(size_t threadId) final;
   void writeRegistersData(std::span<uint8_t> data, uint64_t tid) final;
+  std::vector<uint8_t> readRegister(size_t threadIdx, size_t regNum) final;
 
   void onFileOpen(dpcpp_trace::Tracer::onFileOpenHandler handler) final{};
   void onStat(dpcpp_trace::Tracer::onStatHandler handler) final{};
@@ -41,6 +42,7 @@ public:
   bool isAttached() final;
 
   std::string getGDBTargetXML() final;
+  dpcpp_trace::ProcessInfo getProcessInfo() final;
   std::string getExecutablePath() final;
 
   void createSoftwareBreakpoint(uint64_t address) final;

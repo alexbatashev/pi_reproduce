@@ -27,7 +27,7 @@ concept ByteSequence = std::ranges::forward_range<T> &&
 
 GDBServerProtocol::GDBServerProtocol(DebugServer &server) : mServer(server) {}
 
-constexpr std::string encode(ByteSequence auto data) {
+static std::string encode(ByteSequence auto data) {
   std::string response;
   response.reserve(data.size() * 2);
   for (auto v : data) {
@@ -38,6 +38,10 @@ constexpr std::string encode(ByteSequence auto data) {
     response += hexMap[(v >> 0) & 0xf];
   }
   return response;
+}
+
+static std::string encode(std::string_view data) {
+  return encode(std::span{reinterpret_cast<const uint8_t*>(data.data()), data.size()});
 }
 
 constexpr int hexDigitToInt(char c) {
@@ -211,6 +215,10 @@ std::string GDBServerProtocol::processPacket(std::string_view packet) {
     return process_vFile(packet);
   } else if (ctre::match<"\\+?\\$c#[0-9a-fA-F]{2}\\+?">(packet)) {
     return process_c(packet);
+  } else if (ctre::match<"\\+?\\$p[0-9a-f]+#[0-9a-fA-F]{2}\\+?">(packet)) {
+    return process_p(packet);
+  } else if (ctre::match<"\\+?\\$qProcessInfo#[0-9a-fA-F]{2}\\+?">(packet)) {
+    return process_qProcessInfo(packet);
   } else if (packet == "+") {
     return processAck(packet);
   } else {
@@ -540,6 +548,19 @@ std::string GDBServerProtocol::process_c(std::string_view) {
   return createResponse(encodeStopReason(stopReason), mAck);
 }
 
+std::string GDBServerProtocol::process_p(std::string_view packet) {
+  auto [match, regHex] = ctre::match<"\\+?\\$p([0-9a-f]+)#[0-9a-fA-F]{2}\\+?">(packet);
+
+  size_t regNum = parseInt<size_t>(regHex);
+
+  auto data = mServer.getActiveDebugger()->readRegister(mCurrentThreadIndex, regNum);
+
+  if (data.empty())
+    return createResponse("E01", mAck);
+
+  return createResponse(encode(data), mAck);
+}
+
 std::string GDBServerProtocol::process_vFile(std::string_view packet) {
   {
     auto match =
@@ -638,6 +659,21 @@ std::string GDBServerProtocol::process_qAttached(std::string_view) {
   const std::string attached =
       mServer.getActiveDebugger()->isAttached() ? "1" : "0";
   return createResponse(attached, mAck);
+}
+
+std::string GDBServerProtocol::process_qProcessInfo(std::string_view) {
+  // TODO figure out why LLDB fails to resolve breakpoint locations with this
+  // extension.
+  return createResponse("", mAck);
+
+  ProcessInfo info = mServer.getActiveDebugger()->getProcessInfo();
+  std::string response = fmt::format("pid:{:x};prarent-pid:{:x};real-uid:{:x};real-gid:{:x};effective-uid:{:x};effective-gid:{:x};triple:{:s};ostype:{:s};endian:{:s};", info.pid, info.parentPID, info.realUID, info.realGID, info.effectiveUID, info.effectiveGID, encode(info.triple), info.ostype, info.endian);
+  if (!info.targetABI.empty()) {
+    response += fmt::format("elf_abi:{};", info.targetABI);
+  }
+  response += fmt::format("ptrsize:{:x}", info.pointerSize);
+
+  return createResponse(response, mAck);
 }
 
 std::string GDBServerProtocol::processUnsupported(std::string_view) {
