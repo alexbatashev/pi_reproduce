@@ -1,10 +1,8 @@
 add_dpcpp_trace_library(host_debugger SHARED
   HostDebugger.cpp
-  HostProcess.cpp
-  HostPlatform.cpp
   )
 
-target_include_directories(host_debugger PRIVATE
+target_include_directories(host_debugger SYSTEM PRIVATE
   ${INTEL_LLVM_SOURCE_PATH}/lldb/include
   ${INTEL_LLVM_SOURCE_PATH}/llvm/include
   ${INTEL_LLVM_BINARY_PATH}/tools/lldb/include
@@ -131,6 +129,8 @@ lldbPluginTraceCommon
 lldbPluginTypeSystemClang
 lldbPluginUnwindAssemblyInstEmulation
 lldbPluginUnwindAssemblyX86
+lldbPluginPlatformGDB
+lldbPluginProcessGDBRemote
 lldbSymbol
 lldbTarget
 lldbUtility

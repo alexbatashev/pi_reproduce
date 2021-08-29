@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <vector>
 
 namespace dpcpp_trace {
@@ -47,6 +48,7 @@ public:
   virtual ~AbstractDebugger() = default;
 
   virtual std::vector<uint8_t> getRegistersData(size_t threadIdx) = 0;
+  virtual void writeRegistersData(std::span<uint8_t> data, uint64_t tid) = 0;
 
   virtual std::string getGDBTargetXML() = 0;
   virtual std::string getExecutablePath() = 0;
@@ -60,10 +62,14 @@ public:
 
   virtual StopReason getStopReason(size_t threadId) = 0;
 
-  virtual void CreateSWBreakpoint(uint64_t address) = 0;
+  virtual void createSoftwareBreakpoint(uint64_t address) = 0;
+  virtual void removeSoftwareBreakpoint(uint64_t address) = 0;
   virtual void resume(int signal = 0, uint64_t tid = 0) = 0;
+  virtual void stepInstruction(uint64_t tid, int signal = 0) = 0;
 
   virtual std::vector<uint8_t> readMemory(uint64_t addr, size_t len) = 0;
+  virtual void writeMemory(uint64_t addr, size_t len,
+                           std::span<uint8_t> data) = 0;
 
   virtual std::vector<uint8_t> getAuxvData() = 0;
 

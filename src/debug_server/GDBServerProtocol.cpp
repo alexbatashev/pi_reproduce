@@ -14,6 +14,7 @@
 #include <span>
 #include <sys/stat.h>
 #include <type_traits>
+#include <vector>
 
 #include <fcntl.h>
 
@@ -37,6 +38,29 @@ constexpr std::string encode(ByteSequence auto data) {
     response += hexMap[(v >> 0) & 0xf];
   }
   return response;
+}
+
+constexpr int hexDigitToInt(char c) {
+  if (c >= 'a' && c <= 'f')
+    return 10 + c - 'a';
+  if (c >= 'A' && c <= 'F')
+    return 10 + c - 'a';
+  if (c >= '0' && c <= '9')
+    return c - '0';
+  return -1;
+}
+
+static std::vector<uint8_t> decode(std::string_view data) {
+  std::vector<uint8_t> buffer;
+  buffer.reserve(data.size() / 2);
+
+  for (size_t idx = 0; idx < data.size(); idx += 2) {
+    uint8_t num = 0;
+    num += hexDigitToInt(data[idx]) << 4;
+    num += hexDigitToInt(data[idx + 1]);
+    buffer.push_back(num);
+  }
+  return buffer;
 }
 
 static std::string escape(ByteSequence auto data) {
@@ -67,16 +91,6 @@ std::string trim(std::string_view v) {
 constexpr std::string encode(std::integral auto num) {
   std::span<uint8_t> bytes(reinterpret_cast<uint8_t *>(&num), sizeof(num));
   return trim(encode(bytes | std::views::reverse));
-}
-
-constexpr int hexDigitToInt(char c) {
-  if (c >= 'a' && c <= 'f')
-    return 10 + c - 'a';
-  if (c >= 'A' && c <= 'F')
-    return 10 + c - 'a';
-  if (c >= '0' && c <= '9')
-    return c - '0';
-  return -1;
 }
 
 template <std::integral I> constexpr I parseInt(std::string_view num) {
@@ -160,9 +174,7 @@ std::string GDBServerProtocol::processPacket(std::string_view packet) {
   if (ctre::match<"\\+?\\$qAttached(?::[0-9a-zA-Z]+)?#[0-9a-fA-F]{2}\\+?">(
           packet)) {
     return process_qAttached(packet);
-  } else if (ctre::match<
-                 "\\+?\\$qSupported:[0-9a-zA-Z\\+\\-;=]+#[0-9a-fA-F]{2}\\+?">(
-                 packet)) {
+  } else if (ctre::match<"\\+?\\$qSupported:.+#[0-9a-fA-F]{2}\\+?">(packet)) {
     return process_qSupported(packet);
   } else if (ctre::match<"\\+?\\$QStartNoAckMode#[0-9a-fA-F]{2}\\+?">(packet)) {
     return process_QStartNoAckMode(packet);
@@ -170,6 +182,8 @@ std::string GDBServerProtocol::processPacket(std::string_view packet) {
     return processStatus(packet);
   } else if (ctre::match<"\\+?\\$g#[0-9a-fA-F]{2}\\+?">(packet)) {
     return process_g(packet);
+  } else if (ctre::match<"\\+?\\$G[0-9a-f]+#[0-9a-fA-F]{2}\\+?">(packet)) {
+    return process_G(packet);
   } else if (ctre::match<"\\+?\\$H.+#[0-9a-fA-F]{2}\\+?">(packet)) {
     return process_H(packet);
   } else if (ctre::match<"\\+?\\$qfThreadInfo#[0-9a-fA-F]{2}\\+?">(packet)) {
@@ -181,6 +195,10 @@ std::string GDBServerProtocol::processPacket(std::string_view packet) {
     return process_qC(packet);
   } else if (ctre::match<"\\+?\\$m[0-9a-fA-F,]+#[0-9a-fA-F]{2}\\+?">(packet)) {
     return process_m(packet);
+  } else if (ctre::match<"\\+?\\$M.+#[0-9a-fA-F]{2}\\+?">(packet)) {
+    return process_M(packet);
+  } else if (ctre::match<"\\+?\\$x[0-9a-fA-F,]+#[0-9a-fA-F]{2}\\+?">(packet)) {
+    return process_m(packet);
   } else if (ctre::match<"\\+?\\$qXfer.+#[0-9a-fA-F]{2}\\+?">(packet)) {
     return process_qXfer(packet);
   } else if (ctre::match<"\\+?\\$z.+#[0-9a-fA-F]{2}\\+?">(packet)) {
@@ -191,6 +209,8 @@ std::string GDBServerProtocol::processPacket(std::string_view packet) {
     return process_vCont(packet);
   } else if (ctre::match<"\\+?\\$vFile.+#[0-9a-fA-F]{2}\\+?">(packet)) {
     return process_vFile(packet);
+  } else if (ctre::match<"\\+?\\$c#[0-9a-fA-F]{2}\\+?">(packet)) {
+    return process_c(packet);
   } else if (packet == "+") {
     return processAck(packet);
   } else {
@@ -263,20 +283,50 @@ std::string GDBServerProtocol::process_g(std::string_view packet) {
   return createResponse(encode(regValues), mAck);
 }
 
+std::string GDBServerProtocol::process_G(std::string_view packet) {
+  auto regValues = decode(packet.substr(1));
+  mServer.getActiveDebugger()->writeRegistersData(regValues,
+                                                  mCurrentThreadIndex);
+  return createResponse("OK", mAck);
+}
+
 std::string GDBServerProtocol::process_m(std::string_view packet) {
   auto [match, startHex, lengthHex] =
-      ctre::match<"\\+?\\$m([0-9a-f]+),([0-9a-f]+)#[0-9a-fA-F]{2}\\+?">(packet);
+      ctre::match<"\\+?\\$[mx]([0-9a-f]+),([0-9a-f]+)#[0-9a-fA-F]{2}\\+?">(
+          packet);
 
   uint64_t start = parseInt<uint64_t>(startHex);
   uint64_t length = parseInt<uint64_t>(lengthHex);
 
-  fmt::print("Reading {} bytes from 0x{:x}\n", length, start);
+  // LLDB is testing us, don't be fooled.
+  if (length == 0)
+    return createResponse("OK", mAck);
 
   std::vector<uint8_t> data =
       mServer.getActiveDebugger()->readMemory(start, length);
   if (data.empty())
     return createResponse("E01", mAck);
+  if (packet.starts_with("$x"))
+    return createResponse(escape(data), mAck);
   return createResponse(encode(data), mAck);
+}
+
+std::string GDBServerProtocol::process_M(std::string_view packet) {
+  auto [match, startHex, lengthHex, dataHex] = ctre::match<
+      "\\+?\\$[mx]([0-9a-f]+),([0-9a-f]+):([0-9a-f]+)#[0-9a-fA-F]{2}\\+?">(
+      packet);
+
+  uint64_t start = parseInt<uint64_t>(startHex);
+  uint64_t length = parseInt<uint64_t>(lengthHex);
+
+  // LLDB is testing us, don't be fooled.
+  if (length == 0)
+    return createResponse("OK", mAck);
+
+  auto data = decode(dataHex);
+
+  mServer.getActiveDebugger()->writeMemory(start, length, data);
+  return createResponse("OK", mAck);
 }
 
 static std::string encodeStopReason(StopReason stopReason) {
@@ -382,7 +432,19 @@ std::string GDBServerProtocol::process_qXfer(std::string_view packet) {
   return createResponse("", mAck);
 }
 
-std::string GDBServerProtocol::process_z(std::string_view) {
+std::string GDBServerProtocol::process_z(std::string_view packet) {
+  {
+    auto [match, addrHex, kindHex] =
+        ctre::match<"\\+?\\$z0,([0-9a-f]+),([0-9a-f]+)#[0-9a-fA-F]{2}\\+?">(
+            packet);
+    if (match) {
+      uint64_t addr = parseInt<uint64_t>(addrHex);
+
+      mServer.getActiveDebugger()->removeSoftwareBreakpoint(addr);
+
+      return createResponse("OK", mAck);
+    }
+  }
   return createResponse("E01", mAck);
 }
 
@@ -394,7 +456,7 @@ std::string GDBServerProtocol::process_Z(std::string_view packet) {
     if (match) {
       uint64_t addr = parseInt<uint64_t>(addrHex);
 
-      mServer.getActiveDebugger()->CreateSWBreakpoint(addr);
+      mServer.getActiveDebugger()->createSoftwareBreakpoint(addr);
 
       return createResponse("OK", mAck);
     }
@@ -419,8 +481,20 @@ std::string GDBServerProtocol::process_vCont(std::string_view packet) {
     }
   }
   {
+    auto [match, tidHex] =
+        ctre::match<"\\+?\\$vCont;c:([a-f0-9]+)#[0-9a-fA-F]{2}\\+?">(packet);
+    if (match) {
+      uint64_t tid = parseInt<uint64_t>(tidHex);
+      mServer.getActiveDebugger()->resume(0, tid);
+      auto stopReason =
+          mServer.getActiveDebugger()->getStopReason(mCurrentThreadIndex);
+      return createResponse(encodeStopReason(stopReason), mAck);
+    }
+  }
+  {
     auto [match, signalHex, tidHex] = ctre::match<
-        "\\+?\\$vCont;C([0-9a-f]+):([0-9a-f]+);c#[0-9a-fA-F]{2}\\+?">(packet);
+        "\\+?\\$vCont;C([0-9a-f]+):([0-9a-f]+)(?:;c)?#[0-9a-fA-F]{2}\\+?">(
+        packet);
     if (match) {
       int signal = parseInt<int>(signalHex);
       uint64_t tid = parseInt<uint64_t>(tidHex);
@@ -431,7 +505,39 @@ std::string GDBServerProtocol::process_vCont(std::string_view packet) {
       return createResponse(encodeStopReason(stopReason), mAck);
     }
   }
+  {
+    auto [match, tidHex] =
+        ctre::match<"\\+?\\$vCont;s:([0-9a-f]+)#[0-9a-fA-F]{2}\\+?">(packet);
+    if (match) {
+      uint64_t tid = parseInt<uint64_t>(tidHex);
+      mServer.getActiveDebugger()->stepInstruction(tid);
+      auto stopReason =
+          mServer.getActiveDebugger()->getStopReason(mCurrentThreadIndex);
+      return createResponse(encodeStopReason(stopReason), mAck);
+    }
+  }
+  {
+    auto [match, signalHex, tidHex] = ctre::match<
+        "\\+?\\$vCont;S([0-9a-f]+):([0-9a-f]+)(?:;c)?#[0-9a-fA-F]{2}\\+?">(
+        packet);
+    if (match) {
+      int signal = parseInt<int>(signalHex);
+      uint64_t tid = parseInt<uint64_t>(tidHex);
+      // TODO what's the meaning of the signal?
+      mServer.getActiveDebugger()->stepInstruction(tid, signal);
+      auto stopReason =
+          mServer.getActiveDebugger()->getStopReason(mCurrentThreadIndex);
+      return createResponse(encodeStopReason(stopReason), mAck);
+    }
+  }
   return createResponse("", mAck);
+}
+
+std::string GDBServerProtocol::process_c(std::string_view) {
+  mServer.getActiveDebugger()->resume();
+  auto stopReason =
+      mServer.getActiveDebugger()->getStopReason(mCurrentThreadIndex);
+  return createResponse(encodeStopReason(stopReason), mAck);
 }
 
 std::string GDBServerProtocol::process_vFile(std::string_view packet) {

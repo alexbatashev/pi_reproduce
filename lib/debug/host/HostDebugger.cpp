@@ -1,18 +1,18 @@
 #include "HostDebugger.hpp"
-#include "HostPlatform.hpp"
-#include "HostProcess.hpp"
-#include "HostThread.hpp"
 
 #include "lldb/Core/Module.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Host/MainLoop.h"
 #include "lldb/Initialization/SystemInitializerCommon.h"
+#include "lldb/Target/ExecutionContext.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/ProcessTrace.h"
 #include "lldb/Target/RegisterContext.h"
 #include "lldb/Target/StopInfo.h"
+#include "lldb/Target/ThreadPlan.h"
 #include "llvm/Support/TargetSelect.h"
 #include <cstdint>
+#include <exception>
 #include <lldb/Utility/RegisterValue.h>
 
 #define LLDB_PLUGIN(p) LLDB_PLUGIN_DECLARE(p)
@@ -50,9 +50,6 @@ extern "C" int initialize(DebuggerInfo *info) {
 #define LLDB_PLUGIN(x) LLDB_PLUGIN_INITIALIZE(x);
 #include "LLDBPlugins.def"
 
-  dpcpp_trace::HostProcess::Initialize();
-  dpcpp_trace::HostPlatform::Initialize();
-
   ProcessTrace::Initialize();
   PluginManager::Initialize();
 
@@ -86,17 +83,17 @@ void HostDebugger::launch(std::string_view executable,
   if (error.Fail()) {
     std::terminate();
   }
-  ProcessLaunchInfo launchInfo;
+  ProcessLaunchInfo launchInfo = mTarget->GetProcessLaunchInfo();
   FileSpec execFileSpec(executable.data());
   launchInfo.SetExecutableFile(execFileSpec, false);
-  launchInfo.GetFlags().Set(eLaunchFlagDebug);
+  launchInfo.GetFlags().Set(eLaunchFlagDebug | eLaunchFlagStopAtEntry);
   launchInfo.SetLaunchInSeparateProcessGroup(true);
 
   const auto toCString = [](const std::string &str) { return str.c_str(); };
 
   std::vector<const char *> cArgs;
-  cArgs.reserve(args.size() + 1);
-  std::transform(args.begin(), args.end(), std::back_inserter(cArgs),
+  cArgs.reserve(args.size());
+  std::transform(args.begin() + 1, args.end(), std::back_inserter(cArgs),
                  toCString);
   cArgs.push_back(nullptr);
 
@@ -106,7 +103,7 @@ void HostDebugger::launch(std::string_view executable,
   cEnv.push_back(nullptr);
 
   launchInfo.SetArguments(cArgs.data(), true);
-
+  launchInfo.SetArg0(args.front());
 
   ModuleSpec moduleSpec(FileSpec(executable.data()));
   mModule = mTarget->GetOrCreateModule(moduleSpec, true);
@@ -118,32 +115,25 @@ void HostDebugger::launch(std::string_view executable,
   if (Module *exeModule = mTarget->GetExecutableModulePointer())
     launchInfo.SetExecutableFile(exeModule->GetPlatformFileSpec(), true);
 
-  mProcess = Platform::GetHostPlatform()->DebugProcess(launchInfo, *mDebugger,
-                                                       mTarget.get(), error);
+  error = mTarget->Launch(launchInfo, nullptr);
 
   if (error.Fail()) {
     std::cerr << "Failed to launch process: " << error.AsCString() << "\n";
-    std::terminate();
-  }
-
-  if (!mProcess) {
-    std::cerr << "Failed to launch process\n";
     std::terminate();
   }
 }
 
 std::vector<uint8_t> HostDebugger::getRegistersData(size_t threadId) {
   auto thread =
-      mTarget->GetProcessSP()->GetThreadList().GetThreadAtIndex(threadId);
+      mTarget->GetProcessSP()->GetThreadList().FindThreadByID(threadId);
+  if (threadId == 0)
+    thread = mTarget->GetProcessSP()->GetThreadList().GetThreadAtIndex(0);
+
   auto regContext = thread->GetRegisterContext();
 
   std::vector<uint8_t> buffer;
 
-#if defined(__amd64__)
-  constexpr size_t NumGPRegisters = 16;
-#endif
-
-  for (uint32_t regNum = 0; regNum < NumGPRegisters; regNum++) {
+  for (uint32_t regNum = 0; regNum < regContext->GetRegisterCount(); regNum++) {
     const RegisterInfo *regInfo = regContext->GetRegisterInfoAtIndex(regNum);
     if (regInfo == nullptr) {
       return {};
@@ -164,6 +154,27 @@ std::vector<uint8_t> HostDebugger::getRegistersData(size_t threadId) {
   }
 
   return buffer;
+}
+
+void HostDebugger::writeRegistersData(std::span<uint8_t> data, uint64_t tid) {
+  auto thread = mTarget->GetProcessSP()->GetThreadList().FindThreadByID(tid);
+  if (tid == 0)
+    thread = mTarget->GetProcessSP()->GetThreadList().GetThreadAtIndex(0);
+
+  auto regContext = thread->GetRegisterContext();
+  for (uint32_t regNum = 0; regNum < regContext->GetRegisterCount(); regNum++) {
+    const RegisterInfo *regInfo = regContext->GetRegisterInfoAtIndex(regNum);
+    if (regInfo == nullptr) {
+      std::cerr << "Failed to fetch register info\n";
+      std::terminate();
+    }
+    if (regInfo->value_regs != nullptr)
+      continue; // skip registers that are contained in other registers
+    llvm::ArrayRef<uint8_t> raw(data.data() + regInfo->byte_offset,
+                                regInfo->byte_size);
+    RegisterValue regValue(raw, eByteOrderLittle);
+    regContext->WriteRegister(regInfo, regValue);
+  }
 }
 
 void HostDebugger::attach(uint64_t pid) {}
@@ -187,52 +198,68 @@ bool HostDebugger::isAttached() { return mTarget != nullptr; }
 
 dpcpp_trace::StopReason HostDebugger::getStopReason(size_t threadId) {
   auto thread =
-      mTarget->GetProcessSP()->GetThreadList().GetThreadAtIndex(threadId);
+      mTarget->GetProcessSP()->GetThreadList().FindThreadByID(threadId);
+
+  if (threadId == 0)
+    thread = mTarget->GetProcessSP()->GetThreadList().GetThreadAtIndex(0);
 
   auto stateType = mTarget->GetProcessSP()->GetState();
 
   dpcpp_trace::StopReason returnReason;
 
-  if (stateType == eStateExited) {
+  switch (stateType) {
+  case eStateExited:
+  case eStateInvalid:
+  case eStateUnloaded:
     returnReason.type = dpcpp_trace::StopReason::Type::exit;
     return returnReason;
+  case eStateAttaching:
+  case eStateLaunching:
+  case eStateRunning:
+  case eStateStepping:
+  case eStateDetached:
+    returnReason.type = dpcpp_trace::StopReason::Type::none;
+    return returnReason;
+  default:
+    break;
   }
 
-  if (stateType == eStateStopped) {
-    auto realReason = thread->GetStopReason();
-    switch (realReason) {
-    case eStopReasonInvalid:
-      returnReason.type = dpcpp_trace::StopReason::Type::none;
-      break;
-    case eStopReasonTrace:
-      returnReason.type = dpcpp_trace::StopReason::Type::trace;
-      break;
-    case eStopReasonNone: // Software breakpoints?
-    case eStopReasonBreakpoint:
-      returnReason.type = dpcpp_trace::StopReason::Type::breakpoint;
-      break;
-    case eStopReasonWatchpoint:
-      returnReason.type = dpcpp_trace::StopReason::Type::watchpoint;
-      break;
-    case eStopReasonSignal: {
-      returnReason.type = dpcpp_trace::StopReason::Type::signal;
-      auto info = thread->GetStopInfo();
-      returnReason.code = static_cast<int>(info->GetValue());
-      break;
-    }
-    case eStopReasonException:
-      returnReason.type = dpcpp_trace::StopReason::Type::exception;
-      break;
-    case eStopReasonFork:
-      returnReason.type = dpcpp_trace::StopReason::Type::fork;
-      break;
-    case eStopReasonVFork:
-      returnReason.type = dpcpp_trace::StopReason::Type::vfork;
-      break;
-    case eStopReasonVForkDone:
-      returnReason.type = dpcpp_trace::StopReason::Type::vfork_done;
-      break;
-    }
+  auto realReason = thread->GetStopReason();
+  switch (realReason) {
+  case eStopReasonInvalid:
+    returnReason.type = dpcpp_trace::StopReason::Type::exit;
+    break;
+  case eStopReasonTrace:
+    returnReason.type = dpcpp_trace::StopReason::Type::trace;
+    break;
+  case eStopReasonNone: // Software breakpoints?
+  case eStopReasonBreakpoint:
+  case eStopReasonPlanComplete:
+    returnReason.type = dpcpp_trace::StopReason::Type::breakpoint;
+    break;
+  case eStopReasonWatchpoint:
+    returnReason.type = dpcpp_trace::StopReason::Type::watchpoint;
+    break;
+  case eStopReasonSignal: {
+    returnReason.type = dpcpp_trace::StopReason::Type::signal;
+    auto info = thread->GetStopInfo();
+    returnReason.code = static_cast<int>(info->GetValue());
+    break;
+  }
+  case eStopReasonException:
+    returnReason.type = dpcpp_trace::StopReason::Type::exception;
+    break;
+  case eStopReasonFork:
+    returnReason.type = dpcpp_trace::StopReason::Type::fork;
+    break;
+  case eStopReasonVFork:
+    returnReason.type = dpcpp_trace::StopReason::Type::vfork;
+    break;
+  case eStopReasonVForkDone:
+    returnReason.type = dpcpp_trace::StopReason::Type::vfork_done;
+    break;
+  default:
+    returnReason.type = dpcpp_trace::StopReason::Type::none;
   }
 
   return returnReason;
@@ -250,21 +277,39 @@ uint64_t HostDebugger::getThreadIDAtIndex(size_t threadIdx) {
 }
 
 std::vector<uint8_t> HostDebugger::readMemory(uint64_t addr, size_t len) {
-  std::vector<uint8_t> buf;
-  buf.resize(len);
-  Status status;
+  auto process = mTarget->GetProcessSP();
+  Process::StopLocker stopLocker;
+  if (stopLocker.TryLock(&process->GetRunLock())) {
+    std::lock_guard<std::recursive_mutex> guard(
+        process->GetTarget().GetAPIMutex());
 
-  auto proc = std::static_pointer_cast<dpcpp_trace::HostProcess>(
-      mTarget->GetProcessSP());
-  size_t actualBytes =
-      proc->ReadMemoryFromInferior(addr, buf.data(), len, status);
-  if (status.Fail() && actualBytes == 0) {
-    return {};
+    std::vector<uint8_t> buf;
+    buf.resize(len);
+
+    Status error;
+    size_t actualBytes = process->ReadMemory(addr, buf.data(), len, error);
+
+    if (error.Fail())
+      return {};
+
+    buf.resize(actualBytes);
+    return buf;
   }
 
-  buf.resize(actualBytes);
+  return {};
+}
 
-  return buf;
+void HostDebugger::writeMemory(uint64_t addr, size_t len,
+                               std::span<uint8_t> data) {
+  auto process = mTarget->GetProcessSP();
+  Process::StopLocker stopLocker;
+  if (stopLocker.TryLock(&process->GetRunLock())) {
+    std::lock_guard<std::recursive_mutex> guard(
+        process->GetTarget().GetAPIMutex());
+
+    Status error;
+    process->WriteMemory(addr, data.data(), len, error);
+  }
 }
 
 std::string HostDebugger::getExecutablePath() { return mExecutablePath; }
@@ -278,8 +323,95 @@ inline constexpr auto GDBXMLTemplate = R"(<?xml version="1.0"?>
 </target>
 )";
 
+static llvm::StringRef GetEncodingNameOrEmpty(const RegisterInfo &reg_info) {
+  switch (reg_info.encoding) {
+  case eEncodingUint:
+    return "uint";
+  case eEncodingSint:
+    return "sint";
+  case eEncodingIEEE754:
+    return "ieee754";
+  case eEncodingVector:
+    return "vector";
+  default:
+    return "";
+  }
+}
+
+static llvm::StringRef GetFormatNameOrEmpty(const RegisterInfo &reg_info) {
+  switch (reg_info.format) {
+  case eFormatBinary:
+    return "binary";
+  case eFormatDecimal:
+    return "decimal";
+  case eFormatHex:
+    return "hex";
+  case eFormatFloat:
+    return "float";
+  case eFormatVectorOfSInt8:
+    return "vector-sint8";
+  case eFormatVectorOfUInt8:
+    return "vector-uint8";
+  case eFormatVectorOfSInt16:
+    return "vector-sint16";
+  case eFormatVectorOfUInt16:
+    return "vector-uint16";
+  case eFormatVectorOfSInt32:
+    return "vector-sint32";
+  case eFormatVectorOfUInt32:
+    return "vector-uint32";
+  case eFormatVectorOfFloat32:
+    return "vector-float32";
+  case eFormatVectorOfUInt64:
+    return "vector-uint64";
+  case eFormatVectorOfUInt128:
+    return "vector-uint128";
+  default:
+    return "";
+  };
+}
+
 // TODO find a portable way of doing the same.
 std::string HostDebugger::getGDBTargetXML() {
+
+  std::string result = "<?xml version=\"1.0\"?>\n"
+                       "<target version=\"1.0\">\n";
+  result +=
+      fmt::format("<architecture>{}</architecture>\n",
+                  mTarget->GetArchitecture().GetTriple().getArchName().str());
+
+  result += "<feature>\n";
+
+  auto thread = mTarget->GetProcessSP()->GetThreadList().GetThreadAtIndex(0);
+
+  auto regContext = thread->GetRegisterContext();
+
+  for (size_t regIndex = 0; regIndex < regContext->GetRegisterCount();
+       regIndex++) {
+    const RegisterInfo *regInfo = regContext->GetRegisterInfoAtIndex(regIndex);
+
+    result += fmt::format("<reg name=\"{}\" bitsize=\"{}\" regnum=\"{}\" ",
+                          regInfo->name, regInfo->byte_size * 8, regIndex);
+    result += fmt::format("offset=\"{}\" ", regInfo->byte_offset);
+
+    if (regInfo->alt_name && regInfo->alt_name[0])
+      result += fmt::format("altname=\"{}\" ", regInfo->alt_name);
+
+    llvm::StringRef encoding = GetEncodingNameOrEmpty(*regInfo);
+    if (!encoding.empty())
+      result += fmt::format("encoding=\"{}\" ", encoding);
+
+    llvm::StringRef format = GetFormatNameOrEmpty(*regInfo);
+    if (!format.empty())
+      result += fmt::format("format=\"{}\" ", format);
+
+    result += "/>\n";
+  }
+
+  result += "</feature>\n</target>";
+
+  return result;
+
   if (mTargetXML.empty()) {
 #ifdef linux
     constexpr auto arch = "i386:x86-64";
@@ -443,29 +575,87 @@ std::string HostDebugger::getGDBTargetXML() {
   return mTargetXML;
 }
 
-void HostDebugger::CreateSWBreakpoint(uint64_t address) {
-  mTarget->CreateBreakpoint(address, false, false);
+void HostDebugger::createSoftwareBreakpoint(uint64_t address) {
+  if (mTarget) {
+    std::lock_guard guard(mTarget->GetAPIMutex());
+    auto bp = mTarget->CreateBreakpoint(address, false, false);
+    if (bp) {
+      mBreakpoints[address] = bp;
+    }
+  }
+}
+
+void HostDebugger::removeSoftwareBreakpoint(uint64_t address) {
+  if (mTarget) {
+    std::lock_guard guard(mTarget->GetAPIMutex());
+
+    if (mBreakpoints.contains(address)) {
+      mTarget->RemoveBreakpointByID(mBreakpoints[address]->GetID());
+      mBreakpoints.erase(address);
+    }
+  }
 }
 
 void HostDebugger::resume(int signal, uint64_t tid) {
-  if (signal > 0) {
-    auto thread = mProcess->GetThreadList().FindThreadByID(tid);
-    if (thread)
-      thread->SetResumeSignal(signal);
+  mTarget->GetProcessSP()->GetThreadList().SetSelectedThreadByID(tid);
+  Status error = mTarget->GetProcessSP()->ResumeSynchronous(nullptr);
+  if (error.Fail()) {
+    std::cerr << "Error resuming process: " << error.AsCString() << "\n";
+    std::terminate();
   }
-  StateType type = mProcess->GetState();
-  if (type == eStateRunning)
-    return;
-  auto err = mProcess->Resume();
-  if (err.Fail()) {
-    std::clog << "Failed to resume process " << err.AsCString() << "\n";
-    return;
+}
+
+void HostDebugger::stepInstruction(uint64_t tid, int signal) {
+  auto thread = mTarget->GetProcessSP()->GetThreadList().FindThreadByID(tid);
+  if (tid == 0)
+    thread = mTarget->GetProcessSP()->GetThreadList().GetThreadAtIndex(0);
+
+  if (!thread) {
+    std::cerr << "Failed to find thread with id " << tid << "\n";
+    std::terminate();
   }
-  type = mProcess->GetState();
-  while (type != eStateStopped && type != eStateExited &&
-         type != eStateCrashed) {
-    type = mTarget->GetProcessSP()->WaitForProcessToStop(llvm::None);
+
+  if (signal != 0) {
+    thread->SetResumeSignal(signal);
   }
+
+  ExecutionContext exe;
+
+  thread->CalculateExecutionContext(exe);
+
+  if (!exe.HasThreadScope()) {
+    std::cerr << "Thread object is invalid\n";
+    std::terminate();
+  }
+
+  Status error;
+
+  ThreadPlanSP newPlan(thread->QueueThreadPlanForStepSingleInstruction(
+      false, true, true, error));
+  if (error.Fail()) {
+    std::cerr << "Failed to create thread plan: " << error.AsCString() << "\n";
+    std::terminate();
+  }
+
+  resumeNewPlan(exe, newPlan.get());
+}
+
+void HostDebugger::resumeNewPlan(ExecutionContext &ctx, ThreadPlan *newPlan) {
+  Process *proc = ctx.GetProcessPtr();
+  Thread *thread = ctx.GetThreadPtr();
+  if (!proc || !thread) {
+    std::cerr << "Invalid execution context\n";
+    std::terminate();
+  }
+
+  if (newPlan != nullptr) {
+    newPlan->SetIsMasterPlan(true);
+    newPlan->SetOkayToDiscard(false);
+  }
+
+  // Why do we need to set the current thread by ID here???
+  proc->GetThreadList().SetSelectedThreadByID(thread->GetID());
+  proc->ResumeSynchronous(nullptr);
 }
 
 std::vector<uint8_t> HostDebugger::getAuxvData() {

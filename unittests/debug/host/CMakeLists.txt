@@ -2,7 +2,7 @@ add_dpcpp_trace_executable(HostDebuggerTests
   main.cpp
   launch.cpp
   )
-target_include_directories(HostDebuggerTests PRIVATE
+target_include_directories(HostDebuggerTests SYSTEM PRIVATE
   ${INTEL_LLVM_SOURCE_PATH}/lldb/include
   ${INTEL_LLVM_SOURCE_PATH}/llvm/include
   ${INTEL_LLVM_BINARY_PATH}/tools/lldb/include

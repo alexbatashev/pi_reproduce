@@ -33,6 +33,7 @@ public:
               std::span<std::string> env) final;
 
   std::vector<uint8_t> getRegistersData(size_t threadId) final;
+  void writeRegistersData(std::span<uint8_t> data, uint64_t tid) final;
 
   void onFileOpen(dpcpp_trace::Tracer::onFileOpenHandler handler) final{};
   void onStat(dpcpp_trace::Tracer::onStatHandler handler) final{};
@@ -42,8 +43,10 @@ public:
   std::string getGDBTargetXML() final;
   std::string getExecutablePath() final;
 
-  void CreateSWBreakpoint(uint64_t address) final;
+  void createSoftwareBreakpoint(uint64_t address) final;
+  void removeSoftwareBreakpoint(uint64_t address) final;
   void resume(int signal, uint64_t tid) final;
+  void stepInstruction(uint64_t tid, int signal) final;
 
   void start() final;
   int wait() final;
@@ -56,18 +59,21 @@ public:
   uint64_t getThreadIDAtIndex(size_t threadIdx) final;
 
   std::vector<uint8_t> readMemory(uint64_t addr, size_t len) final;
+  void writeMemory(uint64_t addr, size_t len, std::span<uint8_t> data) final;
 
   std::vector<uint8_t> getAuxvData() final;
 
   void *cast(std::size_t type) override;
 
 private:
+  void resumeNewPlan(lldb_private::ExecutionContext &ctx,
+                     lldb_private::ThreadPlan *newPlan);
+
   lldb::DebuggerSP mDebugger;
   lldb::TargetSP mTarget;
-  lldb::ProcessSP mProcess;
-  lldb::BreakpointSP mStartBP;
   lldb::ModuleSP mModule;
 
   std::string mTargetXML;
   std::string mExecutablePath;
+  std::unordered_map<uint64_t, lldb::BreakpointSP> mBreakpoints;
 };

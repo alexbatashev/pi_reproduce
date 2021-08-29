@@ -31,8 +31,8 @@ void debug(const options &opts) {
   void *hostDebuggerHandle = dlopen(hostDebuggerLib.c_str(), RTLD_NOW);
   if (!hostDebuggerHandle)
     throw std::runtime_error("Failed to load host debugger");
-  auto hostDebuggerInit =
-      (int (*)(DebuggerInfo *))dlsym(hostDebuggerHandle, "initialize");
+  auto hostDebuggerInit = reinterpret_cast<int (*)(DebuggerInfo *)>(
+      dlsym(hostDebuggerHandle, "initialize"));
 
   DebuggerInfo hostDebuggerInfo;
   hostDebuggerInit(&hostDebuggerInfo);
