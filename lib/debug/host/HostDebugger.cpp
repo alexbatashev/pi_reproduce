@@ -1,18 +1,17 @@
 #include "HostDebugger.hpp"
-#include "HostPlatform.hpp"
-#include "HostProcess.hpp"
-#include "HostThread.hpp"
 
-#include "lldb/Core/Module.h"
-#include "lldb/Core/PluginManager.h"
-#include "lldb/Host/MainLoop.h"
-#include "lldb/Initialization/SystemInitializerCommon.h"
-#include "lldb/Target/Process.h"
-#include "lldb/Target/ProcessTrace.h"
-#include "lldb/Target/RegisterContext.h"
-#include "lldb/Target/StopInfo.h"
-#include "llvm/Support/TargetSelect.h"
-#include <cstdint>
+#include <lldb/Core/Module.h>
+#include <lldb/Core/PluginManager.h>
+#include <lldb/Host/MainLoop.h>
+#include <lldb/Initialization/SystemInitializerCommon.h>
+#include <lldb/Target/ExecutionContext.h>
+#include <lldb/Target/Process.h>
+#include <lldb/Target/ProcessTrace.h>
+#include <lldb/Target/RegisterContext.h>
+#include <lldb/Target/StopInfo.h>
+#include <lldb/Target/ThreadPlan.h>
+#include <lldb/Utility/ProcessInfo.h>
+#include <llvm/Support/TargetSelect.h>
 #include <lldb/Utility/RegisterValue.h>
 
 #define LLDB_PLUGIN(p) LLDB_PLUGIN_DECLARE(p)
@@ -25,6 +24,8 @@
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <cstdint>
+#include <exception>
 
 using namespace lldb;
 using namespace lldb_private;
@@ -49,9 +50,6 @@ extern "C" int initialize(DebuggerInfo *info) {
 
 #define LLDB_PLUGIN(x) LLDB_PLUGIN_INITIALIZE(x);
 #include "LLDBPlugins.def"
-
-  dpcpp_trace::HostProcess::Initialize();
-  dpcpp_trace::HostPlatform::Initialize();
 
   ProcessTrace::Initialize();
   PluginManager::Initialize();
@@ -86,17 +84,17 @@ void HostDebugger::launch(std::string_view executable,
   if (error.Fail()) {
     std::terminate();
   }
-  ProcessLaunchInfo launchInfo;
+  ProcessLaunchInfo launchInfo = mTarget->GetProcessLaunchInfo();
   FileSpec execFileSpec(executable.data());
   launchInfo.SetExecutableFile(execFileSpec, false);
-  launchInfo.GetFlags().Set(eLaunchFlagDebug);
+  launchInfo.GetFlags().Set(eLaunchFlagDebug | eLaunchFlagStopAtEntry);
   launchInfo.SetLaunchInSeparateProcessGroup(true);
 
   const auto toCString = [](const std::string &str) { return str.c_str(); };
 
   std::vector<const char *> cArgs;
-  cArgs.reserve(args.size() + 1);
-  std::transform(args.begin(), args.end(), std::back_inserter(cArgs),
+  cArgs.reserve(args.size());
+  std::transform(args.begin() + 1, args.end(), std::back_inserter(cArgs),
                  toCString);
   cArgs.push_back(nullptr);
 
@@ -106,7 +104,7 @@ void HostDebugger::launch(std::string_view executable,
   cEnv.push_back(nullptr);
 
   launchInfo.SetArguments(cArgs.data(), true);
-
+  launchInfo.SetArg0(args.front());
 
   ModuleSpec moduleSpec(FileSpec(executable.data()));
   mModule = mTarget->GetOrCreateModule(moduleSpec, true);
@@ -118,32 +116,25 @@ void HostDebugger::launch(std::string_view executable,
   if (Module *exeModule = mTarget->GetExecutableModulePointer())
     launchInfo.SetExecutableFile(exeModule->GetPlatformFileSpec(), true);
 
-  mProcess = Platform::GetHostPlatform()->DebugProcess(launchInfo, *mDebugger,
-                                                       mTarget.get(), error);
+  error = mTarget->Launch(launchInfo, nullptr);
 
   if (error.Fail()) {
     std::cerr << "Failed to launch process: " << error.AsCString() << "\n";
-    std::terminate();
-  }
-
-  if (!mProcess) {
-    std::cerr << "Failed to launch process\n";
     std::terminate();
   }
 }
 
 std::vector<uint8_t> HostDebugger::getRegistersData(size_t threadId) {
   auto thread =
-      mTarget->GetProcessSP()->GetThreadList().GetThreadAtIndex(threadId);
+      mTarget->GetProcessSP()->GetThreadList().FindThreadByID(threadId);
+  if (threadId == 0)
+    thread = mTarget->GetProcessSP()->GetThreadList().GetThreadAtIndex(0);
+
   auto regContext = thread->GetRegisterContext();
 
   std::vector<uint8_t> buffer;
 
-#if defined(__amd64__)
-  constexpr size_t NumGPRegisters = 16;
-#endif
-
-  for (uint32_t regNum = 0; regNum < NumGPRegisters; regNum++) {
+  for (uint32_t regNum = 0; regNum < regContext->GetRegisterCount(); regNum++) {
     const RegisterInfo *regInfo = regContext->GetRegisterInfoAtIndex(regNum);
     if (regInfo == nullptr) {
       return {};
@@ -164,6 +155,52 @@ std::vector<uint8_t> HostDebugger::getRegistersData(size_t threadId) {
   }
 
   return buffer;
+}
+
+std::vector<uint8_t> HostDebugger::readRegister(size_t threadId, size_t regNum) {
+  auto thread =
+      mTarget->GetProcessSP()->GetThreadList().FindThreadByID(threadId);
+  if (threadId == 0)
+    thread = mTarget->GetProcessSP()->GetThreadList().GetThreadAtIndex(0);
+
+  auto regContext = thread->GetRegisterContext();
+
+  if (regNum > regContext->GetRegisterCount())
+    return {};
+
+  std::vector<uint8_t> buffer;
+
+  const RegisterInfo *regInfo = regContext->GetRegisterInfoAtIndex(regNum);
+  RegisterValue regValue;
+  bool success = regContext->ReadRegister(regInfo, regValue);
+  if (!success) {
+    return {};
+  }
+  buffer.resize(regInfo->byte_size);
+  memcpy(buffer.data(), regValue.GetBytes(), regInfo->byte_size);
+
+  return buffer;
+}
+
+void HostDebugger::writeRegistersData(std::span<uint8_t> data, uint64_t tid) {
+  auto thread = mTarget->GetProcessSP()->GetThreadList().FindThreadByID(tid);
+  if (tid == 0)
+    thread = mTarget->GetProcessSP()->GetThreadList().GetThreadAtIndex(0);
+
+  auto regContext = thread->GetRegisterContext();
+  for (uint32_t regNum = 0; regNum < regContext->GetRegisterCount(); regNum++) {
+    const RegisterInfo *regInfo = regContext->GetRegisterInfoAtIndex(regNum);
+    if (regInfo == nullptr) {
+      std::cerr << "Failed to fetch register info\n";
+      std::terminate();
+    }
+    if (regInfo->value_regs != nullptr)
+      continue; // skip registers that are contained in other registers
+    llvm::ArrayRef<uint8_t> raw(data.data() + regInfo->byte_offset,
+                                regInfo->byte_size);
+    RegisterValue regValue(raw, eByteOrderLittle);
+    regContext->WriteRegister(regInfo, regValue);
+  }
 }
 
 void HostDebugger::attach(uint64_t pid) {}
@@ -187,52 +224,68 @@ bool HostDebugger::isAttached() { return mTarget != nullptr; }
 
 dpcpp_trace::StopReason HostDebugger::getStopReason(size_t threadId) {
   auto thread =
-      mTarget->GetProcessSP()->GetThreadList().GetThreadAtIndex(threadId);
+      mTarget->GetProcessSP()->GetThreadList().FindThreadByID(threadId);
+
+  if (threadId == 0)
+    thread = mTarget->GetProcessSP()->GetThreadList().GetThreadAtIndex(0);
 
   auto stateType = mTarget->GetProcessSP()->GetState();
 
   dpcpp_trace::StopReason returnReason;
 
-  if (stateType == eStateExited) {
+  switch (stateType) {
+  case eStateExited:
+  case eStateInvalid:
+  case eStateUnloaded:
     returnReason.type = dpcpp_trace::StopReason::Type::exit;
     return returnReason;
+  case eStateAttaching:
+  case eStateLaunching:
+  case eStateRunning:
+  case eStateStepping:
+  case eStateDetached:
+    returnReason.type = dpcpp_trace::StopReason::Type::none;
+    return returnReason;
+  default:
+    break;
   }
 
-  if (stateType == eStateStopped) {
-    auto realReason = thread->GetStopReason();
-    switch (realReason) {
-    case eStopReasonInvalid:
-      returnReason.type = dpcpp_trace::StopReason::Type::none;
-      break;
-    case eStopReasonTrace:
-      returnReason.type = dpcpp_trace::StopReason::Type::trace;
-      break;
-    case eStopReasonNone: // Software breakpoints?
-    case eStopReasonBreakpoint:
-      returnReason.type = dpcpp_trace::StopReason::Type::breakpoint;
-      break;
-    case eStopReasonWatchpoint:
-      returnReason.type = dpcpp_trace::StopReason::Type::watchpoint;
-      break;
-    case eStopReasonSignal: {
-      returnReason.type = dpcpp_trace::StopReason::Type::signal;
-      auto info = thread->GetStopInfo();
-      returnReason.code = static_cast<int>(info->GetValue());
-      break;
-    }
-    case eStopReasonException:
-      returnReason.type = dpcpp_trace::StopReason::Type::exception;
-      break;
-    case eStopReasonFork:
-      returnReason.type = dpcpp_trace::StopReason::Type::fork;
-      break;
-    case eStopReasonVFork:
-      returnReason.type = dpcpp_trace::StopReason::Type::vfork;
-      break;
-    case eStopReasonVForkDone:
-      returnReason.type = dpcpp_trace::StopReason::Type::vfork_done;
-      break;
-    }
+  auto realReason = thread->GetStopReason();
+  switch (realReason) {
+  case eStopReasonInvalid:
+    returnReason.type = dpcpp_trace::StopReason::Type::exit;
+    break;
+  case eStopReasonTrace:
+    returnReason.type = dpcpp_trace::StopReason::Type::trace;
+    break;
+  case eStopReasonNone: // Software breakpoints?
+  case eStopReasonBreakpoint:
+  case eStopReasonPlanComplete:
+    returnReason.type = dpcpp_trace::StopReason::Type::breakpoint;
+    break;
+  case eStopReasonWatchpoint:
+    returnReason.type = dpcpp_trace::StopReason::Type::watchpoint;
+    break;
+  case eStopReasonSignal: {
+    returnReason.type = dpcpp_trace::StopReason::Type::signal;
+    auto info = thread->GetStopInfo();
+    returnReason.code = static_cast<int>(info->GetValue());
+    break;
+  }
+  case eStopReasonException:
+    returnReason.type = dpcpp_trace::StopReason::Type::exception;
+    break;
+  case eStopReasonFork:
+    returnReason.type = dpcpp_trace::StopReason::Type::fork;
+    break;
+  case eStopReasonVFork:
+    returnReason.type = dpcpp_trace::StopReason::Type::vfork;
+    break;
+  case eStopReasonVForkDone:
+    returnReason.type = dpcpp_trace::StopReason::Type::vfork_done;
+    break;
+  default:
+    returnReason.type = dpcpp_trace::StopReason::Type::none;
   }
 
   return returnReason;
@@ -250,222 +303,260 @@ uint64_t HostDebugger::getThreadIDAtIndex(size_t threadIdx) {
 }
 
 std::vector<uint8_t> HostDebugger::readMemory(uint64_t addr, size_t len) {
-  std::vector<uint8_t> buf;
-  buf.resize(len);
-  Status status;
+  auto process = mTarget->GetProcessSP();
+  Process::StopLocker stopLocker;
+  if (stopLocker.TryLock(&process->GetRunLock())) {
+    std::lock_guard<std::recursive_mutex> guard(
+        process->GetTarget().GetAPIMutex());
 
-  auto proc = std::static_pointer_cast<dpcpp_trace::HostProcess>(
-      mTarget->GetProcessSP());
-  size_t actualBytes =
-      proc->ReadMemoryFromInferior(addr, buf.data(), len, status);
-  if (status.Fail() && actualBytes == 0) {
-    return {};
+    std::vector<uint8_t> buf;
+    buf.resize(len);
+
+    Status error;
+    size_t actualBytes = process->ReadMemory(addr, buf.data(), len, error);
+
+    if (error.Fail())
+      return {};
+
+    buf.resize(actualBytes);
+    return buf;
   }
 
-  buf.resize(actualBytes);
+  return {};
+}
 
-  return buf;
+void HostDebugger::writeMemory(uint64_t addr, size_t len,
+                               std::span<uint8_t> data) {
+  auto process = mTarget->GetProcessSP();
+  Process::StopLocker stopLocker;
+  if (stopLocker.TryLock(&process->GetRunLock())) {
+    std::lock_guard<std::recursive_mutex> guard(
+        process->GetTarget().GetAPIMutex());
+
+    Status error;
+    process->WriteMemory(addr, data.data(), len, error);
+  }
 }
 
 std::string HostDebugger::getExecutablePath() { return mExecutablePath; }
 
-inline constexpr auto GDBXMLTemplate = R"(<?xml version="1.0"?>
-<!DOCTYPE target SYSTEM "gdb-target.dtd">
-<target version="1.0">
-<architecture>{}</architecture>
-<osabi>{}</osabi>
-{}
-</target>
-)";
-
-// TODO find a portable way of doing the same.
-std::string HostDebugger::getGDBTargetXML() {
-  if (mTargetXML.empty()) {
-#ifdef linux
-    constexpr auto arch = "i386:x86-64";
-    constexpr auto abi = "GNU/Linux";
-#endif
-
-    cpuinfo_initialize();
-
-    std::string features;
-
-    features = R"(<feature name="org.gnu.gdb.i386.core">
- <flags id="i386_eflags" size="4">
- <field name="CF" start="0" end="0" type="bool"/>
- <field name="" start="1" end="1" type="bool"/>
- <field name="PF" start="2" end="2" type="bool"/>
- <field name="AF" start="4" end="4" type="bool"/>
- <field name="ZF" start="6" end="6" type="bool"/>
- <field name="SF" start="7" end="7" type="bool"/>
- <field name="TF" start="8" end="8" type="bool"/>
- <field name="IF" start="9" end="9" type="bool"/>
- <field name="DF" start="10" end="10" type="bool"/>
- <field name="OF" start="11" end="11" type="bool"/>
- <field name="NT" start="14" end="14" type="bool"/>
- <field name="RF" start="16" end="16" type="bool"/>
- <field name="VM" start="17" end="17" type="bool"/>
- <field name="AC" start="18" end="18" type="bool"/>
- <field name="VIF" start="19" end="19" type="bool"/>
- <field name="VIP" start="20" end="20" type="bool"/>
- <field name="ID" start="21" end="21" type="bool"/>
- </flags>
- <reg name="rax" bitsize="64" type="int64" regnum="0"/>
- <reg name="rbx" bitsize="64" type="int64" regnum="1"/>
- <reg name="rcx" bitsize="64" type="int64" regnum="2"/>
- <reg name="rdx" bitsize="64" type="int64" regnum="3"/>
- <reg name="rsi" bitsize="64" type="int64" regnum="4"/>
- <reg name="rdi" bitsize="64" type="int64" regnum="5"/>
- <reg name="rbp" bitsize="64" type="data_ptr" regnum="6"/>
- <reg name="rsp" bitsize="64" type="data_ptr" regnum="7"/>
- <reg name="r8" bitsize="64" type="int64" regnum="8"/>
- <reg name="r9" bitsize="64" type="int64" regnum="9"/>
- <reg name="r10" bitsize="64" type="int64" regnum="10"/>
- <reg name="r11" bitsize="64" type="int64" regnum="11"/>
- <reg name="r12" bitsize="64" type="int64" regnum="12"/>
- <reg name="r13" bitsize="64" type="int64" regnum="13"/>
- <reg name="r14" bitsize="64" type="int64" regnum="14"/>
- <reg name="r15" bitsize="64" type="int64" regnum="15"/>
- <reg name="rip" bitsize="64" type="code_ptr" regnum="16"/>
- <reg name="eflags" bitsize="32" type="i386_eflags" regnum="17"/>
- <reg name="cs" bitsize="32" type="int32" regnum="18"/>
- <reg name="ss" bitsize="32" type="int32" regnum="19"/>
- <reg name="ds" bitsize="32" type="int32" regnum="20"/>
- <reg name="es" bitsize="32" type="int32" regnum="21"/>
- <reg name="fs" bitsize="32" type="int32" regnum="22"/>
- <reg name="gs" bitsize="32" type="int32" regnum="23"/>
- <reg name="st0" bitsize="80" type="i387_ext" regnum="24"/>
- <reg name="st1" bitsize="80" type="i387_ext" regnum="25"/>
- <reg name="st2" bitsize="80" type="i387_ext" regnum="26"/>
- <reg name="st3" bitsize="80" type="i387_ext" regnum="27"/>
- <reg name="st4" bitsize="80" type="i387_ext" regnum="28"/>
- <reg name="st5" bitsize="80" type="i387_ext" regnum="29"/>
- <reg name="st6" bitsize="80" type="i387_ext" regnum="30"/>
- <reg name="st7" bitsize="80" type="i387_ext" regnum="31"/>
- <reg name="fctrl" bitsize="32" type="int" regnum="32" group="float"/>
- <reg name="fstat" bitsize="32" type="int" regnum="33" group="float"/>
- <reg name="ftag" bitsize="32" type="int" regnum="34" group="float"/>
- <reg name="fiseg" bitsize="32" type="int" regnum="35" group="float"/>
- <reg name="fioff" bitsize="32" type="int" regnum="36" group="float"/>
- <reg name="foseg" bitsize="32" type="int" regnum="37" group="float"/>
- <reg name="fooff" bitsize="32" type="int" regnum="38" group="float"/>
- <reg name="fop" bitsize="32" type="int" regnum="39" group="float"/>
-</feature>
-<feature name="org.gnu.gdb.i386.linux">
-  <reg name="orig_rax" bitsize="64" type="int" regnum="57"/>
-</feature>
-<feature name="org.gnu.gdb.i386.segments">
-  <reg name="fs_base" bitsize="64" type="int" regnum="58"/>
-  <reg name="gs_base" bitsize="64" type="int" regnum="59"/>
-</feature>
-    )";
-
-    if (cpuinfo_has_x86_sse()) {
-      features += R"(<feature name="org.gnu.gdb.i386.sse">
- <vector id="v8bf16" type="bfloat16" count="8"/>
- <vector id="v4f" type="ieee_single" count="4"/>
- <vector id="v2d" type="ieee_double" count="2"/>
- <vector id="v16i8" type="int8" count="16"/>
- <vector id="v8i16" type="int16" count="8"/>
- <vector id="v4i32" type="int32" count="4"/>
- <vector id="v2i64" type="int64" count="2"/>
- <union id="vec128">
- <field name="v8_bfloat16" type="v8bf16"/>
- <field name="v4_float" type="v4f"/>
- <field name="v2_double" type="v2d"/>
- <field name="v16_int8" type="v16i8"/>
- <field name="v8_int16" type="v8i16"/>
- <field name="v4_int32" type="v4i32"/>
- <field name="v2_int64" type="v2i64"/>
- <field name="uint128" type="uint128"/>
- </union>
- <flags id="i386_mxcsr" size="4">
- <field name="IE" start="0" end="0" type="bool"/>
- <field name="DE" start="1" end="1" type="bool"/> <field name="ZE" start="2" end="2" type="bool"/>
- <field name="OE" start="3" end="3" type="bool"/>
- <field name="UE" start="4" end="4" type="bool"/>
- <field name="PE" start="5" end="5" type="bool"/>
- <field name="DAZ" start="6" end="6" type="bool"/>
- <field name="IM" start="7" end="7" type="bool"/>
- <field name="DM" start="8" end="8" type="bool"/>
- <field name="ZM" start="9" end="9" type="bool"/>
- <field name="OM" start="10" end="10" type="bool"/>
- <field name="UM" start="11" end="11" type="bool"/>
- <field name="PM" start="12" end="12" type="bool"/>
- <field name="FZ" start="15" end="15" type="bool"/>
- </flags>
- <reg name="xmm0" bitsize="128" type="vec128" regnum="40"/>
- <reg name="xmm1" bitsize="128" type="vec128" regnum="41"/>
- <reg name="xmm2" bitsize="128" type="vec128" regnum="42"/>
- <reg name="xmm3" bitsize="128" type="vec128" regnum="43"/>
- <reg name="xmm4" bitsize="128" type="vec128" regnum="44"/>
- <reg name="xmm5" bitsize="128" type="vec128" regnum="45"/>
- <reg name="xmm6" bitsize="128" type="vec128" regnum="46"/>
- <reg name="xmm7" bitsize="128" type="vec128" regnum="47"/>
- <reg name="xmm8" bitsize="128" type="vec128" regnum="48"/>
- <reg name="xmm9" bitsize="128" type="vec128" regnum="49"/>
- <reg name="xmm10" bitsize="128" type="vec128" regnum="50"/>
- <reg name="xmm11" bitsize="128" type="vec128" regnum="51"/>
- <reg name="xmm12" bitsize="128" type="vec128" regnum="52"/>
- <reg name="xmm13" bitsize="128" type="vec128" regnum="53"/>
- <reg name="xmm14" bitsize="128" type="vec128" regnum="54"/>
- <reg name="xmm15" bitsize="128" type="vec128" regnum="55"/>
- <reg name="mxcsr" bitsize="32" type="i386_mxcsr" regnum="56" group="vector"/>
-  </feature>
-)";
-    }
-
-    if (cpuinfo_has_x86_avx()) {
-      features += R"(<feature name="org.gnu.gdb.i386.avx">
- <reg name="ymm0h" bitsize="128" type="uint128" regnum="60"/>
- <reg name="ymm1h" bitsize="128" type="uint128" regnum="61"/>
- <reg name="ymm2h" bitsize="128" type="uint128" regnum="62"/>
- <reg name="ymm3h" bitsize="128" type="uint128" regnum="63"/>
- <reg name="ymm4h" bitsize="128" type="uint128" regnum="64"/>
- <reg name="ymm5h" bitsize="128" type="uint128" regnum="65"/>
- <reg name="ymm6h" bitsize="128" type="uint128" regnum="66"/>
- <reg name="ymm7h" bitsize="128" type="uint128" regnum="67"/>
- <reg name="ymm8h" bitsize="128" type="uint128" regnum="68"/>
- <reg name="ymm9h" bitsize="128" type="uint128" regnum="69"/>
- <reg name="ymm10h" bitsize="128" type="uint128" regnum="70"/>
- <reg name="ymm11h" bitsize="128" type="uint128" regnum="71"/>
- <reg name="ymm12h" bitsize="128" type="uint128" regnum="72"/>
- <reg name="ymm13h" bitsize="128" type="uint128" regnum="73"/>
- <reg name="ymm14h" bitsize="128" type="uint128" regnum="74"/>
- <reg name="ymm15h" bitsize="128" type="uint128" regnum="75"/>
-</feature>
-)";
-    }
-
-    mTargetXML = fmt::format(GDBXMLTemplate, arch, abi, features);
+static llvm::StringRef getEncodingNameOrEmpty(const RegisterInfo &regInfo) {
+  switch (regInfo.encoding) {
+  case eEncodingUint:
+    return "uint";
+  case eEncodingSint:
+    return "sint";
+  case eEncodingIEEE754:
+    return "ieee754";
+  case eEncodingVector:
+    return "vector";
+  default:
+    return "";
   }
-
-  return mTargetXML;
 }
 
-void HostDebugger::CreateSWBreakpoint(uint64_t address) {
-  mTarget->CreateBreakpoint(address, false, false);
+static llvm::StringRef getFormatNameOrEmpty(const RegisterInfo &regInfo) {
+  switch (regInfo.format) {
+  case eFormatBinary:
+    return "binary";
+  case eFormatDecimal:
+    return "decimal";
+  case eFormatHex:
+    return "hex";
+  case eFormatFloat:
+    return "float";
+  case eFormatVectorOfSInt8:
+    return "vector-sint8";
+  case eFormatVectorOfUInt8:
+    return "vector-uint8";
+  case eFormatVectorOfSInt16:
+    return "vector-sint16";
+  case eFormatVectorOfUInt16:
+    return "vector-uint16";
+  case eFormatVectorOfSInt32:
+    return "vector-sint32";
+  case eFormatVectorOfUInt32:
+    return "vector-uint32";
+  case eFormatVectorOfFloat32:
+    return "vector-float32";
+  case eFormatVectorOfUInt64:
+    return "vector-uint64";
+  case eFormatVectorOfUInt128:
+    return "vector-uint128";
+  default:
+    return "";
+  };
+}
+
+// TODO find a portable way of doing the same for GDB.
+std::string HostDebugger::getGDBTargetXML() {
+
+  std::string result = "<?xml version=\"1.0\"?>\n"
+                       "<target version=\"1.0\">\n";
+  result +=
+      fmt::format("<architecture>{}</architecture>\n",
+                  mTarget->GetArchitecture().GetTriple().getArchName().str());
+
+  result += "<feature>\n";
+
+  auto thread = mTarget->GetProcessSP()->GetThreadList().GetThreadAtIndex(0);
+
+  auto regContext = thread->GetRegisterContext();
+
+  for (size_t regIndex = 0; regIndex < regContext->GetRegisterCount();
+       regIndex++) {
+    const RegisterInfo *regInfo = regContext->GetRegisterInfoAtIndex(regIndex);
+
+    result += fmt::format("<reg name=\"{}\" bitsize=\"{}\" regnum=\"{}\" ",
+                          regInfo->name, regInfo->byte_size * 8, regIndex);
+    result += fmt::format("offset=\"{}\" ", regInfo->byte_offset);
+
+    if (regInfo->alt_name && regInfo->alt_name[0])
+      result += fmt::format("altname=\"{}\" ", regInfo->alt_name);
+
+    llvm::StringRef encoding = getEncodingNameOrEmpty(*regInfo);
+    if (!encoding.empty())
+      result += fmt::format("encoding=\"{}\" ", encoding);
+
+    llvm::StringRef format = getFormatNameOrEmpty(*regInfo);
+    if (!format.empty())
+      result += fmt::format("format=\"{}\" ", format);
+
+    result += "/>\n";
+  }
+
+  result += "</feature>\n</target>";
+
+  return result;
+}
+
+dpcpp_trace::ProcessInfo HostDebugger::getProcessInfo() {
+  if (!mTarget) {
+    std::cerr << "Invalid target\n";
+    std::terminate();
+  }
+    ProcessInstanceInfo info;
+    if (!mTarget->GetProcessSP()->GetProcessInfo(info)) {
+      std::cerr << "Failed to get process info\n";
+      std::terminate();
+    }
+    const ArchSpec &procArch = info.GetArchitecture();
+    if (!procArch.IsValid()) {
+      std::cerr << "Failed to get process info\n";
+      std::terminate();
+    }
+
+    std::string endian;
+    switch (procArch.GetByteOrder()) {
+    case lldb::eByteOrderLittle:
+      endian = "little";
+      break;
+    case lldb::eByteOrderBig:
+      endian = "big";
+      break;
+    case lldb::eByteOrderPDP:
+      endian = "pdp";
+      break;
+    default:
+      // Nothing.
+      break;
+    }
+
+    const llvm::Triple &triple = procArch.GetTriple();
+    dpcpp_trace::ProcessInfo returnInfo{
+        info.GetProcessID(), info.GetParentProcessID(), info.GetUserID(), info.GetGroupID(), info.GetEffectiveUserID(),
+        info.GetEffectiveGroupID(),
+        triple.getTriple(),
+        triple.getOSName().str(),
+        endian,
+        procArch.GetTargetABI(),
+        procArch.GetAddressByteSize()
+    };
+
+    return returnInfo;
+}
+
+void HostDebugger::createSoftwareBreakpoint(uint64_t address) {
+  if (mTarget) {
+    std::lock_guard guard(mTarget->GetAPIMutex());
+    auto bp = mTarget->CreateBreakpoint(address, false, false);
+    if (bp) {
+      mBreakpoints[address] = bp;
+    }
+  }
+}
+
+void HostDebugger::removeSoftwareBreakpoint(uint64_t address) {
+  if (mTarget) {
+    std::lock_guard guard(mTarget->GetAPIMutex());
+
+    if (mBreakpoints.contains(address)) {
+      mTarget->RemoveBreakpointByID(mBreakpoints[address]->GetID());
+      mBreakpoints.erase(address);
+    }
+  }
 }
 
 void HostDebugger::resume(int signal, uint64_t tid) {
-  if (signal > 0) {
-    auto thread = mProcess->GetThreadList().FindThreadByID(tid);
-    if (thread)
-      thread->SetResumeSignal(signal);
+  mTarget->GetProcessSP()->GetThreadList().SetSelectedThreadByID(tid);
+  Status error = mTarget->GetProcessSP()->ResumeSynchronous(nullptr);
+  if (error.Fail()) {
+    std::cerr << "Error resuming process: " << error.AsCString() << "\n";
+    std::terminate();
   }
-  StateType type = mProcess->GetState();
-  if (type == eStateRunning)
-    return;
-  auto err = mProcess->Resume();
-  if (err.Fail()) {
-    std::clog << "Failed to resume process " << err.AsCString() << "\n";
-    return;
+}
+
+void HostDebugger::stepInstruction(uint64_t tid, int signal) {
+  auto thread = mTarget->GetProcessSP()->GetThreadList().FindThreadByID(tid);
+  if (tid == 0)
+    thread = mTarget->GetProcessSP()->GetThreadList().GetThreadAtIndex(0);
+
+  if (!thread) {
+    std::cerr << "Failed to find thread with id " << tid << "\n";
+    std::terminate();
   }
-  type = mProcess->GetState();
-  while (type != eStateStopped && type != eStateExited &&
-         type != eStateCrashed) {
-    type = mTarget->GetProcessSP()->WaitForProcessToStop(llvm::None);
+
+  if (signal != 0) {
+    thread->SetResumeSignal(signal);
   }
+
+  ExecutionContext exe;
+
+  thread->CalculateExecutionContext(exe);
+
+  if (!exe.HasThreadScope()) {
+    std::cerr << "Thread object is invalid\n";
+    std::terminate();
+  }
+
+  Status error;
+
+  ThreadPlanSP newPlan(thread->QueueThreadPlanForStepSingleInstruction(
+      false, true, true, error));
+  if (error.Fail()) {
+    std::cerr << "Failed to create thread plan: " << error.AsCString() << "\n";
+    std::terminate();
+  }
+
+  resumeNewPlan(exe, newPlan.get());
+}
+
+void HostDebugger::resumeNewPlan(ExecutionContext &ctx, ThreadPlan *newPlan) {
+  Process *proc = ctx.GetProcessPtr();
+  Thread *thread = ctx.GetThreadPtr();
+  if (!proc || !thread) {
+    std::cerr << "Invalid execution context\n";
+    std::terminate();
+  }
+
+  if (newPlan != nullptr) {
+    newPlan->SetIsMasterPlan(true);
+    newPlan->SetOkayToDiscard(false);
+  }
+
+  // Why do we need to set the current thread by ID here???
+  proc->GetThreadList().SetSelectedThreadByID(thread->GetID());
+  proc->ResumeSynchronous(nullptr);
 }
 
 std::vector<uint8_t> HostDebugger::getAuxvData() {

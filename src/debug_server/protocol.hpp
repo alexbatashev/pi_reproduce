@@ -12,6 +12,6 @@ public:
 
   virtual std::string processPacket(std::string_view packet) = 0;
 
-private:
+  virtual ~Protocol() = default;
 };
 } // namespace dpcpp_trace

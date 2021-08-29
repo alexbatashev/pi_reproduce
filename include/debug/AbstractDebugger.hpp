@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <vector>
 
 namespace dpcpp_trace {
@@ -39,6 +40,20 @@ struct StopReason {
   int code = 0;
 };
 
+struct ProcessInfo {
+  uint64_t pid;
+  uint64_t parentPID;
+  uint64_t realUID;
+  uint64_t realGID;
+  uint64_t effectiveUID;
+  uint64_t effectiveGID;
+  std::string triple;
+  std::string ostype;
+  std::string endian; // TODO should it be an enum?
+  std::string targetABI;
+  uint32_t pointerSize;
+};
+
 class AbstractDebugger : public RTTIRoot, public RTTIChild<AbstractDebugger> {
 public:
   constexpr static std::size_t ID =
@@ -47,8 +62,11 @@ public:
   virtual ~AbstractDebugger() = default;
 
   virtual std::vector<uint8_t> getRegistersData(size_t threadIdx) = 0;
+  virtual void writeRegistersData(std::span<uint8_t> data, uint64_t tid) = 0;
+  virtual std::vector<uint8_t> readRegister(size_t threadIdx, size_t regNum) = 0;
 
   virtual std::string getGDBTargetXML() = 0;
+  virtual ProcessInfo getProcessInfo() = 0;
   virtual std::string getExecutablePath() = 0;
 
   virtual void attach(uint64_t pid) = 0;
@@ -60,10 +78,14 @@ public:
 
   virtual StopReason getStopReason(size_t threadId) = 0;
 
-  virtual void CreateSWBreakpoint(uint64_t address) = 0;
+  virtual void createSoftwareBreakpoint(uint64_t address) = 0;
+  virtual void removeSoftwareBreakpoint(uint64_t address) = 0;
   virtual void resume(int signal = 0, uint64_t tid = 0) = 0;
+  virtual void stepInstruction(uint64_t tid, int signal = 0) = 0;
 
   virtual std::vector<uint8_t> readMemory(uint64_t addr, size_t len) = 0;
+  virtual void writeMemory(uint64_t addr, size_t len,
+                           std::span<uint8_t> data) = 0;
 
   virtual std::vector<uint8_t> getAuxvData() = 0;
 
