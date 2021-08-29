@@ -221,6 +221,9 @@ std::string GDBServerProtocol::processPacket(std::string_view packet) {
     return process_qProcessInfo(packet);
   } else if (packet == "+") {
     return processAck(packet);
+  } else if (ctre::match<"\\+?\\$k#[0-9a-fA-F]{2}\\+?">(packet)) {
+    mRunning = false;
+    return "";
   } else {
     return processUnsupported(packet);
   }

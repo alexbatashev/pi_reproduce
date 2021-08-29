@@ -17,6 +17,8 @@ public:
 
   std::string processPacket(std::string_view packet) final;
 
+  bool isRunning() const final { return mRunning; }
+
 private:
   std::string process_qSupported(std::string_view packet);
   std::string process_qAttached(std::string_view packet);
@@ -39,6 +41,8 @@ private:
   std::string processStatus(std::string_view packet);
   std::string processUnsupported(std::string_view packet);
   std::string processAck(std::string_view packet);
+
+  bool mRunning = true;
 
   bool mAck = true;
 

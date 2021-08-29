@@ -63,4 +63,5 @@ private:
   bool mNoFork = false;
   bool mPrintOnly = false;
   bool mDebugServerOnly = false;
+  bool mDebugServerProtocolLog = false;
 };

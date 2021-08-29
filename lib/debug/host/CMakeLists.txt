@@ -1,5 +1,6 @@
 add_dpcpp_trace_library(host_debugger SHARED
   HostDebugger.cpp
+  ${INTEL_LLVM_SOURCE_PATH}/lldb/tools/lldb-server/Acceptor.cpp
   )
 
 target_include_directories(host_debugger SYSTEM PRIVATE
@@ -8,6 +9,7 @@ target_include_directories(host_debugger SYSTEM PRIVATE
   ${INTEL_LLVM_BINARY_PATH}/tools/lldb/include
   ${INTEL_LLVM_BINARY_PATH}/include
   ${INTEL_LLVM_SOURCE_PATH}/lldb/source
+  ${INTEL_LLVM_SOURCE_PATH}/lldb/tools/lldb-server/
   )
 
 find_package(LLVM PATHS "${INTEL_LLVM_BINARY_PATH}" NO_DEFAULT_PATH
