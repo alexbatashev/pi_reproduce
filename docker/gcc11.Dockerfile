@@ -27,6 +27,7 @@ RUN cd llvm && mkdir build && cd build && \
       --llvm-external-projects="lldb" \
       --cmake-opt="-DCMAKE_INSTALL_PREFIX=/src/llvm_install" \
       && ninja sycl-toolchain lldb && ninja install && \
-      cp lib/libxptifw.so /src/llvm_install/lib && cd .. && rm -rf build
+      cp lib/libxptifw.so /src/llvm_install/lib && cp lib/libLLDB* /src/llvm_install/lib &&\
+      cd .. && rm -rf build
 
 ENTRYPOINT [ /bin/bash ]
