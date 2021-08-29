@@ -6,7 +6,6 @@
 
 #include <lldb/Core/Debugger.h>
 
-#include <condition_variable>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -72,10 +71,10 @@ private:
                      lldb_private::ThreadPlan *newPlan);
 
   lldb::DebuggerSP mDebugger;
+
   lldb::TargetSP mTarget;
   lldb::ModuleSP mModule;
 
-  std::string mTargetXML;
   std::string mExecutablePath;
   std::unordered_map<uint64_t, lldb::BreakpointSP> mBreakpoints;
 };

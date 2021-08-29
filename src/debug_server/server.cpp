@@ -44,6 +44,8 @@ void DebugServer::run() {
                              use_awaitable);
       fmt::print("-> {}\n", message);
       fmt::print("<- {}\n", response);
+      if (!mProtocol->isRunning())
+        break;
     }
 
     co_return;

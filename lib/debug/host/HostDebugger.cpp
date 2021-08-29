@@ -1,8 +1,13 @@
 #include "HostDebugger.hpp"
 
+#include <Acceptor.h>
+#include <Plugins/Process/gdb-remote/GDBRemoteCommunicationServerLLGS.h>
 #include <lldb/Core/Module.h>
 #include <lldb/Core/PluginManager.h>
+#include <lldb/Host/ConnectionFileDescriptor.h>
 #include <lldb/Host/MainLoop.h>
+#include <lldb/Host/common/NativeProcessProtocol.h>
+#include <lldb/Host/common/TCPSocket.h>
 #include <lldb/Initialization/SystemInitializerCommon.h>
 #include <lldb/Target/ExecutionContext.h>
 #include <lldb/Target/Process.h>
@@ -11,25 +16,42 @@
 #include <lldb/Target/StopInfo.h>
 #include <lldb/Target/ThreadPlan.h>
 #include <lldb/Utility/ProcessInfo.h>
-#include <llvm/Support/TargetSelect.h>
 #include <lldb/Utility/RegisterValue.h>
+#include <llvm/Support/TargetSelect.h>
+
+#if defined(__linux__)
+#include <Plugins/Process/Linux/NativeProcessLinux.h>
+#elif defined(_WIN32)
+#include <Plugins/Process/Windows/Common/NativeProcessWindows.h>
+#endif
 
 #define LLDB_PLUGIN(p) LLDB_PLUGIN_DECLARE(p)
 #include "LLDBPlugins.def"
 #undef LLDB_PLUGIN
 
 #include <cpuinfo.h>
+#include <cstdint>
+#include <exception>
+#include <fcntl.h>
 #include <filesystem>
 #include <fmt/core.h>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
-#include <cstdint>
-#include <exception>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 using namespace lldb;
 using namespace lldb_private;
+using namespace lldb_private::lldb_server;
 namespace fs = std::filesystem;
+
+#if defined(__linux__)
+typedef process_linux::NativeProcessLinux::Factory NativeProcessFactory;
+#elif defined(_WIN32)
+typedef NativeProcessWindows::Factory NativeProcessFactory;
+#endif
 
 std::unique_ptr<SystemInitializerCommon> gSystemInitializer;
 
@@ -84,6 +106,7 @@ void HostDebugger::launch(std::string_view executable,
   if (error.Fail()) {
     std::terminate();
   }
+
   ProcessLaunchInfo launchInfo = mTarget->GetProcessLaunchInfo();
   FileSpec execFileSpec(executable.data());
   launchInfo.SetExecutableFile(execFileSpec, false);
@@ -94,7 +117,7 @@ void HostDebugger::launch(std::string_view executable,
 
   std::vector<const char *> cArgs;
   cArgs.reserve(args.size());
-  std::transform(args.begin() + 1, args.end(), std::back_inserter(cArgs),
+  std::transform(args.begin(), args.end(), std::back_inserter(cArgs),
                  toCString);
   cArgs.push_back(nullptr);
 
@@ -106,6 +129,60 @@ void HostDebugger::launch(std::string_view executable,
   launchInfo.SetArguments(cArgs.data(), true);
   launchInfo.SetArg0(args.front());
 
+  ::pid_t pid = ::fork();
+
+  if (pid == 0) {
+    MainLoop mainLoop;
+    NativeProcessFactory factory;
+    process_gdb_remote::GDBRemoteCommunicationServerLLGS server(mainLoop,
+                                                                factory);
+
+    server.SetLaunchInfo(launchInfo);
+    error = server.LaunchProcess();
+
+    if (error.Fail()) {
+      std::cerr << "Failed to launch process: " << error.AsCString() << "\n";
+      std::terminate();
+    }
+
+    auto listenerOrError = Socket::TcpListen("localhost:11111", true, nullptr);
+    if (!listenerOrError)
+      std::terminate();
+
+    auto listener = std::move(*listenerOrError);
+
+    Socket *connSocket;
+    error = listener->Accept(connSocket);
+
+    if (error.Fail()) {
+      std::cerr << "Failed to accept connection: " << error.AsCString() << "\n";
+      std::terminate();
+    }
+
+    std::unique_ptr<Connection> connection(
+        new ConnectionFileDescriptor(connSocket));
+
+    error = server.InitializeConnection(std::move(connection));
+
+    if (error.Fail()) {
+      std::cerr << "Failed to initialize connection: " << error.AsCString()
+                << "\n";
+      std::terminate();
+    }
+
+    if (!server.IsConnected()) {
+      std::cerr << "gdb-remote is not connected\n";
+      std::terminate();
+    }
+
+    error = mainLoop.Run();
+    if (error.Fail()) {
+      std::cerr << "Failed to start main loop: " << error.AsCString() << "\n";
+      std::terminate();
+    }
+    exit(0);
+  }
+
   ModuleSpec moduleSpec(FileSpec(executable.data()));
   mModule = mTarget->GetOrCreateModule(moduleSpec, true);
   if (!mModule) {
@@ -113,15 +190,21 @@ void HostDebugger::launch(std::string_view executable,
     std::terminate();
   }
 
-  if (Module *exeModule = mTarget->GetExecutableModulePointer())
-    launchInfo.SetExecutableFile(exeModule->GetPlatformFileSpec(), true);
+  auto proc = mTarget->CreateProcess(nullptr, "gdb-remote", nullptr, true);
 
-  error = mTarget->Launch(launchInfo, nullptr);
-
-  if (error.Fail()) {
-    std::cerr << "Failed to launch process: " << error.AsCString() << "\n";
+  if (!proc) {
+    std::cerr << "Failed to create gdb-remote process\n";
     std::terminate();
   }
+
+  error = proc->ConnectRemote("tcp-connect://localhost:11111");
+  if (error.Fail()) {
+    std::cerr << "Failed to connect to gdb-remote process: "
+              << error.AsCString() << "\n";
+    std::terminate();
+  }
+
+  proc->WaitForProcessToStop(llvm::None);
 }
 
 std::vector<uint8_t> HostDebugger::getRegistersData(size_t threadId) {
