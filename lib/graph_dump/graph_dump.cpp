@@ -71,6 +71,8 @@ std::string truncate(std::string Name) {
   }
 }
 
+XPTI_CALLBACK_API void xptiTraceFinish(const char *stream_name) { }
+
 XPTI_CALLBACK_API void tpCallback(uint16_t traceType,
                                   xpti::trace_event_data_t *parent,
                                   xpti::trace_event_data_t *event,
