@@ -57,8 +57,6 @@ static void dumpGraph() {
   traceFile.close();
 }
 
-XPTI_CALLBACK_API void xptiTraceFinish(const char *stream_name) { dumpGraph(); }
-
 __attribute__((destructor)) static void shutdown() {
   // Looks like xptiTraceFinish is never called. Workaround with this.
   dumpGraph();
