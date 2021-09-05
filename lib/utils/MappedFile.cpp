@@ -36,4 +36,24 @@ uint8_t *MappedFile::end() { return static_cast<uint8_t *>(mPtr) + mSize; }
 const uint8_t *MappedFile::end() const {
   return static_cast<uint8_t *>(mPtr) + mSize;
 }
+
+bool MappedFile::readUInt64(uint64_t &val) {
+  if (sizeof(uint64_t) + mPos >= mSize)
+    return false;
+
+  void *basePtr = static_cast<char *>(mPtr) + mPos;
+  val = *static_cast<uint64_t*>(basePtr);
+  mPos += sizeof(uint64_t);
+
+  return true;
+}
+
+void *MappedFile::cur() noexcept {
+  return (static_cast<char*>(mPtr) + mPos);
+}
+
+const void *MappedFile::cur() const noexcept {
+  return (static_cast<const char*>(mPtr) + mPos);
+}
+
 } // namespace dpcpp_trace

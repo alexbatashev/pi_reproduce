@@ -11,6 +11,7 @@ benchmark/1.5.5
 boost/1.76.0
 ctre/3.4.1
 cpuinfo/cci.20201217
+andreasbuhr-cppcoro/cci.20210113
 
 [generators]
 cmake

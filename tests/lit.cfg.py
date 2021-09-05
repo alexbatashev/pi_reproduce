@@ -32,5 +32,6 @@ config.substitutions.append(('%dpcpp_trace', config.dpcpp_trace_bin_dir + "/dpcp
 config.substitutions.append(('%clangxx', config.intel_llvm_bin_root + "/bin/clang++"))
 config.substitutions.append(('%sycl_ls', config.intel_llvm_bin_root + "/bin/sycl-ls"))
 config.substitutions.append(('%FileCheck', config.filecheck_path))
+config.substitutions.append(('%trace_printer', config.dpcpp_trace_bin_dir + "/trace_printer"))
 
 config.suffixes = ['.cpp']

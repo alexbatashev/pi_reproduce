@@ -3,6 +3,7 @@
 inline constexpr auto kSkipMemObjsEnvVar = "DPCPP_TRACE_SKIP_MEM_OBJECTS";
 inline constexpr auto kTracePathEnvVar = "DPCPP_TRACE_DATA_PATH";
 inline constexpr auto kPIDebugStreamName = "sycl.pi.debug";
+inline constexpr auto kOCLDebugStreamName = "opencl.debug";
 
 inline constexpr auto kFilesConfigName = "files_config.json";
 inline constexpr auto kPackedDataPath = "pack";
@@ -10,6 +11,7 @@ inline constexpr auto kPackedDataPath = "pack";
 inline constexpr auto kBuffersPath = "buffers";
 
 inline constexpr auto kPiTraceExt = ".pi_trace";
+inline constexpr auto kOclTraceExt = ".ocl_trace";
 
 // Replay config constants
 inline constexpr auto kReplayConfigName = "replay_config.json";

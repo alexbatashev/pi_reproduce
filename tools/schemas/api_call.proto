@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package dpcpp_trace;
 
+option cc_enable_arenas = true;
+
 message ArgData {
   enum ArgType {
     INT32 = 0;
@@ -20,6 +22,13 @@ message ArgData {
 }
 
 message APICall {
+  enum APIKind {
+    PI = 0;
+    OPENCL = 1;
+    LEVEL_ZERO = 2;
+    CUDA = 3;
+    HIP = 4;
+  }
   uint32 function_id = 1;
   uint64 time_start = 2;
   uint64 time_end = 3;
@@ -27,6 +36,16 @@ message APICall {
   repeated ArgData args = 5;
   repeated bytes small_inputs = 6;
   repeated bytes small_outputs = 7;
+  // TODO remove mem objects
+  // reserved 8, 9;
   repeated string mem_obj_inputs = 8;
   repeated string mem_obj_outputs = 9;
+  uint64 universal_id = 10;
+  uint64 unique_id = 11;
+  string call_name = 12;
+  APIKind kind = 13;
+  oneof result {
+    uint64 int_val = 14;
+    bytes raw_val = 15;
+  }
 }
