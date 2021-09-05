@@ -107,7 +107,7 @@ static void emitFunctionEndEvent(uint64_t correlationID, uint32_t functionId,
                                      nullptr};
 
   xptiNotifySubscribers(
-      streamID, (uint16_t)xpti::trace_point_type_t::function_with_args_begin,
+      streamID, (uint16_t)xpti::trace_point_type_t::function_with_args_end,
       GAPICallEvent, nullptr, correlationID, &Payload);
 }
 

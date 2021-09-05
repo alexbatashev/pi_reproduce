@@ -4,6 +4,7 @@ add_subdirectory(plugin_replay)
 add_subdirectory(system_intercept)
 add_subdirectory(xpti_opencl)
 add_subdirectory(utils)
+add_subdirectory(trace_collector)
 
 if (BUILD_DEBUGGER)
   add_subdirectory(debug)
