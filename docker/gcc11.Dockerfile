@@ -19,9 +19,9 @@ RUN wget https://github.com/Kitware/CMake/releases/download/v3.21.1/cmake-3.21.1
 
 WORKDIR /src
 
-ARG LLVM_TAG=sycl
+ARG LLVM_TAG=xpti_global_objects_revisited
 
-RUN git clone --depth 1 --branch $LLVM_TAG https://github.com/intel/llvm.git
+RUN git clone --depth 1 --branch $LLVM_TAG https://github.com/alexbatashev/llvm.git
 RUN cd llvm && mkdir build && cd build && \
       python3 ../buildbot/configure.py --no-werror \
       --llvm-external-projects="lldb" \
