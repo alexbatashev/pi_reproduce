@@ -29,7 +29,7 @@ TEST_CASE("can fork processes", "[NativeTracer]") {
   };
 
   NativeTracer tracer;
-  tracer.fork(start, false);
+  tracer.fork(start);
   tracer.start();
   tracer.wait();
 
@@ -57,7 +57,7 @@ TEST_CASE("can trace files being open", "[NativeTracer]") {
     if (filename.ends_with(kOpenTestFilename))
       test = true;
   });
-  tracer.fork(start, false);
+  tracer.fork(start);
   tracer.start();
   tracer.wait();
 
@@ -87,7 +87,7 @@ TEST_CASE("can trace files being stat", "[NativeTracer]") {
     if (filename.ends_with(kStatTestFilename))
       test = true;
   });
-  tracer.fork(start, false);
+  tracer.fork(start);
   tracer.start();
   tracer.wait();
 
@@ -121,7 +121,7 @@ TEST_CASE("can replace filenames", "[NativeTracer]") {
       h.replaceFilename(repl.string());
     }
   });
-  tracer.fork(start, false);
+  tracer.fork(start);
   tracer.start();
   tracer.wait();
 
@@ -148,7 +148,7 @@ TEST_CASE("can catch signals", "[NativeTracer]") {
     std::raise(SIGABRT);
   };
   NativeTracer tracer;
-  tracer.fork(start, false);
+  tracer.fork(start);
   tracer.start();
   int result = tracer.wait();
 
@@ -161,7 +161,7 @@ TEST_CASE("can capture exit code", "[NativeTracer]") {
     exit(42);
   };
   NativeTracer tracer;
-  tracer.fork(start, false);
+  tracer.fork(start);
   tracer.start();
   int result = tracer.wait();
 

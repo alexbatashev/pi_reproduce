@@ -7,4 +7,8 @@ add_dpcpp_trace_library(utils STATIC
   MiResource.cpp
 )
 
-target_link_libraries(utils PUBLIC CONAN_PKG::zstd CONAN_PKG::mimalloc)
+target_link_libraries(utils PUBLIC
+  CONAN_PKG::zstd
+  CONAN_PKG::mimalloc
+  CONAN_PKG::fmt
+)
