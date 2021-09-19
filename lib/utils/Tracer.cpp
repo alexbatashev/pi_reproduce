@@ -1,12 +1,17 @@
 #include "utils/Tracer.hpp"
 
+#include <asm/unistd_64.h>
 #include <cstdlib>
 #include <cstring>
 #include <errno.h>
+#include <fmt/core.h>
 #include <iostream>
+#include <linux/filter.h>
 #include <linux/limits.h>
+#include <linux/seccomp.h>
 #include <stdexcept>
 #include <stop_token>
+#include <sys/prctl.h>
 #include <sys/ptrace.h>
 #include <sys/reg.h>
 #include <sys/syscall.h>
@@ -17,10 +22,13 @@
 #include <thread>
 #include <unistd.h>
 
+using namespace std::string_literals;
+
 class WaitResult {
 public:
   enum class ResultType { success, signal, fail, exited };
-  WaitResult(ResultType type, int code) : mType(type), mCode(code) {}
+  WaitResult(ResultType type, int code, int status)
+      : mType(type), mCode(code), mStatus(status) {}
 
   operator bool() const noexcept { return mType == ResultType::success; }
 
@@ -28,23 +36,28 @@ public:
 
   int getCode() const noexcept { return mCode; }
 
+  bool isSeccomp() const noexcept {
+    return mStatus >> 8 == (SIGTRAP | (PTRACE_EVENT_SECCOMP << 8));
+  }
+
 private:
   ResultType mType;
   int mCode;
+  int mStatus;
 };
 
 static WaitResult wait(pid_t pid) {
   int status = 0;
   pid_t res = waitpid(pid, &status, __WALL);
   if (res == -1)
-    return {WaitResult::ResultType::fail, 0};
+    return {WaitResult::ResultType::fail, 0, 0};
 
   if (WIFEXITED(status)) {
-    return {WaitResult::ResultType::exited, WEXITSTATUS(status)};
+    return {WaitResult::ResultType::exited, WEXITSTATUS(status), status};
   }
 
   if (WIFSIGNALED(status)) {
-    return {WaitResult::ResultType::signal, WTERMSIG(status)};
+    return {WaitResult::ResultType::signal, WTERMSIG(status), status};
   }
 
   if (WIFSTOPPED(status)) {
@@ -56,20 +69,46 @@ static WaitResult wait(pid_t pid) {
     case SIGILL:
     case SIGABRT:
     case SIGFPE:
-      return {WaitResult::ResultType::signal, signal};
+      return {WaitResult::ResultType::signal, signal, status};
     default:
-      return {WaitResult::ResultType::success, 0};
+      return {WaitResult::ResultType::success, signal, status};
     }
   }
 
   if (WIFCONTINUED(status)) {
-    return {WaitResult::ResultType::success, 0};
+    return {WaitResult::ResultType::success, 0, status};
   }
 
-  return {WaitResult::ResultType::fail, 0};
+  return {WaitResult::ResultType::fail, 0, status};
 }
 
-static void traceMe(bool hardStop = false) { ptrace(PTRACE_TRACEME, 0, 0, 0); }
+static void traceMe() {
+  struct sock_filter filter[] = {
+      BPF_STMT(BPF_LD + BPF_W + BPF_ABS, offsetof(struct seccomp_data, nr)),
+      BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_newfstatat, 0, 1),
+      BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRACE),
+      BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_openat, 0, 1),
+      BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRACE),
+      BPF_JUMP(BPF_JMP + BPF_JEQ + BPF_K, __NR_stat, 0, 1),
+      BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_TRACE),
+      BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_ALLOW),
+  };
+  struct sock_fprog prog = {
+      .len = static_cast<unsigned short>(sizeof(filter) / sizeof(filter[0])),
+      .filter = filter,
+  };
+
+  ptrace(PTRACE_TRACEME, 0, 0, 0);
+
+  if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) == -1) {
+    throw std::runtime_error(strerror(errno));
+  }
+  if (prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &prog) == -1) {
+    throw std::runtime_error(strerror(errno));
+  }
+
+  kill(getpid(), SIGSTOP);
+}
 
 static std::string readString(pid_t pid, std::uintptr_t addr) {
   constexpr size_t longSize = sizeof(long);
@@ -190,50 +229,51 @@ public:
     cEnv.push_back(nullptr);
 
     const auto start = [&]() {
-      traceMe();
       auto err =
           execve(executable.data(), const_cast<char *const *>(cArgs.data()),
                  const_cast<char *const *>(cEnv.data()));
       if (err) {
         std::cerr << "Unexpected error while running executable: "
                   << strerror(errno) << "\n";
+        exit(err);
       }
     };
 
-    fork(std::move(start), true);
+    fork(std::move(start));
   }
 
-  void fork(std::function<void()> child, bool initialSuspend) {
+  void fork(std::function<void()> child) {
     pid_t pidValue = ::fork();
     if (pidValue == 0) {
+      traceMe();
       child();
       exit(0);
     } else {
-      if (!initialSuspend && ptrace(PTRACE_ATTACH, pidValue, 0, 0) == -1) {
-        throw std::runtime_error("Failed to attach to process");
-      }
       if (auto res = ::wait(pidValue); res != true) {
         if (res.getType() == WaitResult::ResultType::fail)
           throw std::runtime_error(strerror(errno));
         else {
-          mExitCode = res.getCode();
-          return;
+          throw std::runtime_error("Process immediately exited");
         }
       }
+
+      const auto setopt = [=](long opt) {
+        if (ptrace(PTRACE_SETOPTIONS, pidValue, 0, opt) == -1) {
+          throw std::runtime_error(
+              fmt::format("Failed to set option {}: {}", opt, strerror(errno)));
+        }
+      };
+
+      setopt(PTRACE_O_TRACESECCOMP);
+
       mWorker = [=, this](std::stop_token) {
-        ptrace(PTRACE_SETOPTIONS, pidValue, 0, PTRACE_O_TRACESYSGOOD);
-        ptrace(PTRACE_SETOPTIONS, pidValue, 0, PTRACE_O_EXITKILL);
-
-        bool needsContinue = !initialSuspend;
-
         while (true) {
-          if (ptrace(PTRACE_SYSCALL, pidValue, 0, 0) == -1)
-            break;
-          if (needsContinue) {
-            // ptrace(PTRACE_CONT, pidValue, 0, 0);
-            needsContinue = false;
+          if (ptrace(PTRACE_CONT, pidValue, 0, 0) == -1) {
+            throw std::runtime_error(std::string("Failed to continue tracee ") +
+                                     strerror(errno));
           }
-          if (auto res = ::wait(pidValue); res != true) {
+          auto res = ::wait(pidValue);
+          if (res != true) {
             if (res.getType() == WaitResult::ResultType::fail)
               throw std::runtime_error(strerror(errno));
             else {
@@ -241,27 +281,30 @@ public:
               return;
             }
           }
+          if (!res.isSeccomp())
+            continue;
 
           struct user_regs_struct regs;
           if (ptrace(PTRACE_GETREGS, pidValue, 0, &regs) == -1)
             throw std::runtime_error(strerror(errno));
 
-          const long syscall = regs.orig_rax;
+          long call =
+              ptrace(PTRACE_PEEKUSER, pidValue, sizeof(long) * ORIG_RAX, 0);
 
-          switch (syscall) {
-          case SYS_stat: {
+          switch (call) {
+          case __NR_stat: {
             StatHandlerImpl handler{pidValue, sizeof(long) * RDI};
             std::string filename = readString(pidValue, regs.rdi);
             mStatHandler(filename, handler);
             break;
           }
-          case SYS_newfstatat: {
+          case __NR_newfstatat: {
             StatHandlerImpl handler{pidValue, sizeof(long) * RSI};
             std::string filename = readString(pidValue, regs.rsi);
             mStatHandler(filename, handler);
             break;
           }
-          case SYS_openat: {
+          case __NR_openat: {
             OpenHandlerImpl handler{pidValue, sizeof(long) * RSI};
             std::string filename = readString(pidValue, regs.rsi);
             mOpenFileHandler(filename, handler);
@@ -269,21 +312,6 @@ public:
           }
           default:
             break;
-          }
-          if (ptrace(PTRACE_SYSCALL, pidValue, 0, 0) == -1)
-            throw std::runtime_error(strerror(errno));
-          if (auto res = ::wait(pidValue); res != true) {
-            if (res.getType() == WaitResult::ResultType::fail)
-              throw std::runtime_error(strerror(errno));
-            else {
-              mExitCode = res.getCode();
-              return;
-            }
-          }
-          if (ptrace(PTRACE_GETREGS, pidValue, 0, &regs) == -1) {
-            if (errno == ESRCH)
-              break;
-            throw std::runtime_error(strerror(errno));
           }
         }
       };
@@ -294,7 +322,6 @@ public:
     std::stop_token t;
     if (mWorker)
       mWorker(t);
-    // mThread = std::jthread(mWorker);
   }
 
   void onFileOpen(NativeTracer::onFileOpenHandler handler) {
@@ -303,8 +330,6 @@ public:
   void onStat(NativeTracer::onStatHandler handler) { mStatHandler = handler; }
 
   int wait() {
-    // if (mThread.joinable())
-    //  mThread.join();
     return mExitCode;
   }
   void kill() {}
@@ -332,9 +357,7 @@ void NativeTracer::launch(std::string_view executable,
   mImpl->launch(executable, args, env);
 }
 
-void NativeTracer::fork(std::function<void()> child, bool initialSuspend) {
-  mImpl->fork(child, initialSuspend);
-}
+void NativeTracer::fork(std::function<void()> child) { mImpl->fork(child); }
 
 void NativeTracer::onFileOpen(NativeTracer::onFileOpenHandler handler) {
   mImpl->onFileOpen(handler);

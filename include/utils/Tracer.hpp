@@ -62,7 +62,7 @@ public:
 
   void launch(std::string_view executable, std::span<std::string> args,
               std::span<std::string> env) final;
-  void fork(std::function<void()> child, bool initialSuspend = true);
+  void fork(std::function<void()> child);
 
   void onFileOpen(onFileOpenHandler) final;
   void onStat(onStatHandler) final;
