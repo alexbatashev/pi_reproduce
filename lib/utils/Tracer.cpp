@@ -9,7 +9,6 @@
 #include <linux/filter.h>
 #include <linux/limits.h>
 #include <linux/seccomp.h>
-#include <seccomp.h>
 #include <stdexcept>
 #include <stop_token>
 #include <sys/prctl.h>
