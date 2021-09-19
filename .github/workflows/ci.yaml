@@ -15,7 +15,7 @@ jobs:
     # Temporarily disable this job until there's a robust way to get latest SYCL
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/alexbatashev/dpcpp_trace:b1624f4ad7410aac86c8b06a0e0f5effd58b184f
+      image: ghcr.io/alexbatashev/dpcpp_trace:65872ec63b9224d090f18b4655fb481c7df96a8e
       volumes:
         - ${{ github.workspace }}:${{ github.workspace }}
       options: --cap-add SYS_PTRACE --cap-add SYS_ADMIN

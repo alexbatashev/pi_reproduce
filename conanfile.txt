@@ -11,6 +11,7 @@ benchmark/1.5.5
 boost/1.76.0
 ctre/3.4.1
 cpuinfo/cci.20201217
+mimalloc/2.0.2
 
 [generators]
 cmake
@@ -19,4 +20,5 @@ cmake
 protobuf:shared=False
 protobuf:fPIC=True
 zstd:shared=False
+mimalloc:shared=False
 

@@ -18,11 +18,14 @@ int main() {
 // CHECK: Kind: 4
 // CHECK: Format: None
 // CHECK: Device target: spir64
-// CHECK: Compile options: 
-// CHECK: Link options: 
-// CHECK: Offload entries [1]:
+// CHECK: Compile options:
+// CHECK: Link options:
+// CHECK: Offload entries [2]:
 // CHECK:     Address: 0
-// CHECK:     Name: _ZTSZ4mainEUlvE10000_
+// CHECK:     Name: _ZTSN2cl4sycl6detail16AssertInfoCopierE
+// CHECK:     Size: 0
+// CHECK:     Address: 0
+// CHECK:     Name: _ZTSZ4mainEUlvE_
 // CHECK:     Size: 0
 // CHECK: Property sets [1]:
 // CHECK:     Name: SYCL/devicelib req mask
